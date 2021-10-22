@@ -3,7 +3,7 @@ import cv2
 import torch
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
-from utils import load_images
+from utils import load_images, imshow
 import matplotlib.pyplot as plt
 """
 Dataset: Underwater imagery (SUIM)
@@ -22,13 +22,11 @@ class imgDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, i):
+        print('index:',i)
         return self.images[i], self.masks[i]
 
 img_data = imgDataset(images, masks)
 loader = DataLoader(img_data, batch_size=1, shuffle=False)
 img, mask = next(iter(loader))
-img = torch.squeeze(img)
 
-fig = plt.figure()
-plt.imshow(img.numpy())
-plt.show()
+imshow(mask)
