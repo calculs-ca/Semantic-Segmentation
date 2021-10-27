@@ -15,5 +15,7 @@ def load_images(path):
 
 def imshow(img):
     img = torch.squeeze(img)
+    img = img.swapaxes(0, 1)
+    img = img.swapaxes(1, 2)
     plt.imshow(img.numpy())
     plt.show()
