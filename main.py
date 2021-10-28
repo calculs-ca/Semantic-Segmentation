@@ -1,6 +1,7 @@
 import os
 import cv2
 import torch
+import torch.nn as nn
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
@@ -46,3 +47,21 @@ print(net)
 print('input size:', img.size())
 out = net(img)
 print('output shape:', out.size())
+
+# Loss function and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
+
+epochs = 1
+for epochs in range(epochs):
+    running_loss = 0.
+    for image, mask in loader:
+        optimizer.zero_grad()
+
+        output = net(image)
+        print('output shape:', output.size())
+        print('mask shape:', mask.shape)
+        # loss
+        # backward
+        # step
+    # running_loss
