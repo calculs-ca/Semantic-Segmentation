@@ -31,16 +31,23 @@ def imshow(img):
     plt.show()
 
 # Input image transforms
-transform = transforms.Compose([
+imgTransform = transforms.Compose([
             transforms.ToTensor(),
+            transforms.Resize((128, 128)),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
             ])
-# Mask transform: rgb labels to int
+
+# Mask transforms
+maskTransform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Resize((128, 128)),
+            ])
+
 def listToString(arr):
     s = ''.join([str(item) for item in arr])
     return s
 
-# BW-000, HD-001, PF-010, WR-011, RO-100, RI-101, FV-110, SR-111
+# rgb labels to int: BW-000, HD-001, PF-010, WR-011, RO-100, RI-101, FV-110, SR-111
 str2int = { '000': 0, '001': 1, '010': 2, '011': 3, '100':4, '101':5, '110': 6, '111': 7}
 
 def label_mask(mask):
@@ -55,10 +62,9 @@ def label_mask(mask):
 
 # Images dataset
 class imgDataset(Dataset):
-    def __init__(self, images, masks, transform=transform):
-        toTensor = transforms.ToTensor()
-        self.images = [transform(img) for img in images]
-        self.masks = [toTensor(label_mask(mask)) for mask in masks]
+    def __init__(self, images, masks):
+        self.images = [imgTransform(img) for img in images]
+        self.masks = [maskTransform(label_mask(mask)) for mask in masks]
 
 
     def __len__(self):
