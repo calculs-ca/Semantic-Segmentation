@@ -24,6 +24,7 @@ class ConvNet(nn.Module):
         for feature in reversed(self.features):
             self.decoder.append(nn.Conv2d(feature*2, feature, 3, padding=1))
             self.decoder.append(nn.ConvTranspose2d(feature, feature, kernel_size=2, stride=2))
+        self.final = nn.Conv2d(self.features[0], 3, 3, padding=1)
 
     def forward(self, x):
         for step in self.encoder:
@@ -32,5 +33,5 @@ class ConvNet(nn.Module):
         x = self.bottom(x)
         for step in self.decoder:
             x = step(x)
-
+        x = self.final(x)
         return x
