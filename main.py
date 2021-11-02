@@ -4,11 +4,14 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from utils import load_images, imshow, imgDataset
-from models import ConvNet
+from models import ConvNet, UNet
 """
 Dataset: Underwater imagery (SUIM)
 Using 50
 """
+# Select model: 'unet', 'conv'
+model = 'unet'
+
 # Load images from folder
 images = load_images('data/images')
 masks = load_images('data/masks')
@@ -19,14 +22,17 @@ loader = DataLoader(img_data, batch_size=1, shuffle=False)
 img, mask = next(iter(loader))
 #imshow(mask)
 
-net = ConvNet()
+if model == 'unet':
+    net = UNet()
+else:
+    net = ConvNet()
 print(net)
 
 # Loss function and optimizer
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
 
-epochs = 1
+epochs = 3
 for epochs in range(epochs):
     running_loss = 0.
 
@@ -35,8 +41,6 @@ for epochs in range(epochs):
         optimizer.zero_grad()
 
         output = net(image)
-        print('output shape:', output.size())
-        print('mask shape:', mask.shape)
         loss = criterion(output, mask)
         loss.backward()
         optimizer.step()
