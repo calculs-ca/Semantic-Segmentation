@@ -1,5 +1,3 @@
-import os
-import cv2
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -41,8 +39,8 @@ optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
 
 train_loss, test_loss = [], []
 accuracy = []
-epochs = 1
-for epochs in range(epochs):
+epochs = 2
+for epoch in range(epochs):
     net.train()
     running_loss = 0.
 
@@ -56,7 +54,6 @@ for epochs in range(epochs):
         optimizer.step()
 
         running_loss += loss.item()
-    print('loss:', running_loss)
     train_loss.append(running_loss/len(train_loader.dataset))
 
     net.eval()
@@ -66,15 +63,22 @@ for epochs in range(epochs):
         mask = torch.squeeze(mask, dim=1)
         output = net(image)
         loss = criterion(output, mask)
+        test_running_loss += loss.item()
 
-
+        total_pixels = image.size()[-1] * image.size()[-2]
         top_class = torch.argmax(output, 1)
         batch_size = image.size()[0]
+
         for i in range(batch_size):
             m = mask[i]
             equals = top_class[i] == m.view(*top_class[i].shape)
 
-            num_pixels = image.size()[-1]*image.size()[-2]
-            correct_class += equals.sum().item()/num_pixels
-            accuracy_percentage = (correct_class*100)/num_pixels
-            print('Accuracy %.2f' %accuracy_percentage)
+            #print('Correct class:', equals.sum().item(), '/', total_pixels)
+            val = (equals.sum().item()*100)/total_pixels
+            correct_class += val
+            #print('Accuracy: %.2f' %val)
+    test_loss.append(test_running_loss/len(test_loader.dataset))
+    accuracy.append(correct_class/len(test_loader.dataset))
+
+    print('[epoch', epoch+1, '] Training loss: %.5f' %train_loss[-1], ' Validation loss: %.5f' %test_loss[-1])
+    print('     Accuracy: %.2f' %accuracy[-1])
