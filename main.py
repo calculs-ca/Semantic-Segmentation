@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from utils import load_images, imshow, imgDataset
+from utils import load_images, imgDataset, imshow_mult
 from models import ConvNet, UNet
 """
 Dataset: Underwater imagery (SUIM)
@@ -21,11 +21,8 @@ train_data = imgDataset(train_imgs, train_masks)
 test_data = imgDataset(test_imgs, test_masks)
 
 # Data loaders
-train_loader = DataLoader(train_data, batch_size=1, shuffle=False)
-test_loader = DataLoader(test_data, batch_size=1, shuffle=False)
-# Show image sample
-img, mask = next(iter(train_loader))
-#imshow(mask)
+train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
+test_loader = DataLoader(test_data, batch_size=1, shuffle=True)
 
 if model == 'unet':
     net = UNet()
@@ -39,7 +36,7 @@ optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
 
 train_loss, test_loss = [], []
 accuracy = []
-epochs = 2
+epochs = 10
 for epoch in range(epochs):
     net.train()
     running_loss = 0.
@@ -81,4 +78,9 @@ for epoch in range(epochs):
     accuracy.append(correct_class/len(test_loader.dataset))
 
     print('[epoch', epoch+1, '] Training loss: %.5f' %train_loss[-1], ' Validation loss: %.5f' %test_loss[-1])
-    print('     Accuracy: %.2f' %accuracy[-1])
+    print('     Accuracy: %.2f' %accuracy[-1], '%')
+
+# Show example: input image, mask and output
+img, mask = next(iter(test_loader))
+output = torch.argmax(net(img), 1)
+imshow_mult([img, mask, output], ['Input', 'Label', 'Prediction'])
