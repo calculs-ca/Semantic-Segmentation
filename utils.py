@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from natsort import natsorted
+#TODO: load images using PIL instead of cv2
 
 def load_images(path):
     images = []
@@ -20,15 +21,28 @@ def imshow(img):
     img = torch.squeeze(img)
 
     imshape = list(img.shape)
-    print('image shape:', imshape)
-    if imshape[0] == 3:     # RGB image
+    if imshape[0] == 3:         # RGB image
         img = img.swapaxes(0, 1)
         img = img.swapaxes(1, 2)
         plt.imshow(img.numpy())
-    elif len(imshape) == 2:   # grayscale image
+    elif len(imshape) == 2:     # grayscale image
         img = torch.squeeze(img)
-        plt.imshow(img.numpy(), cmap='gray', vmin=0, vmax=255)
+        n_classes = 7
+        plt.imshow(img.numpy(), cmap='gray', vmin=0, vmax=n_classes)
+
+# Show input image, ground truth and model output
+def imshow_mult(imgs, titles=None):
+    fig = plt.figure(figsize=(7, 5))
+    rows = 1
+    cols = len(imgs)
+    for i in range(cols):
+        fig.add_subplot(rows, cols, i+1)
+        imshow(imgs[i])
+        plt.axis('off')
+        title = 'figure'+str(i+1) if titles is None else titles[i]
+        plt.title(title)
     plt.show()
+
 
 # Input image transforms
 imgTransform = transforms.Compose([
