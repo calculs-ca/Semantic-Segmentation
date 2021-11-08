@@ -1,18 +1,18 @@
 import os
-import cv2
+from PIL import Image
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from natsort import natsorted
-#TODO: load images using PIL instead of cv2
 
 def load_images(path):
     images = []
     img_list = natsorted(os.listdir(path))
-    for filename in img_list:
-        img = cv2.imread(os.path.join(path, filename))
+    for f in img_list:
+        img_path = os.path.join(path, f)
+        img = np.array(Image.open(img_path).convert('RGB'))
         if img is not None:
             images.append(img)
     return images
@@ -79,7 +79,6 @@ class imgDataset(Dataset):
     def __init__(self, images, masks):
         self.images = [imgTransform(img) for img in images]
         self.masks = [maskTransform(label_mask(mask)) for mask in masks]
-
 
     def __len__(self):
         return len(self.images)
