@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from utils import load_images, imgDataset, imshow_mult
 from models import ConvNet, UNet
+import matplotlib.pyplot as plt
 """
 Dataset: Underwater imagery (SUIM)
 Using 50 for training and 25 for testing
@@ -36,7 +37,7 @@ optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
 
 train_loss, test_loss = [], []
 accuracy = []
-epochs = 10
+epochs = 30
 for epoch in range(epochs):
     net.train()
     running_loss = 0.
@@ -84,3 +85,18 @@ for epoch in range(epochs):
 img, mask = next(iter(test_loader))
 output = torch.argmax(net(img), 1)
 imshow_mult([img, mask, output], ['Input', 'Label', 'Prediction'])
+
+# Plots
+epochs_arr = [i+1 for i in range(epochs)]
+plt.figure()
+
+plt.subplot(211)
+plt.plot(epochs_arr, train_loss, label='Training loss')
+plt.plot(epochs_arr, test_loss, label='Validation loss')
+plt.legend()
+
+plt.subplot(212)
+plt.plot(epochs_arr, accuracy, label='Accuracy %')
+plt.legend()
+
+plt.show()
