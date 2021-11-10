@@ -1,8 +1,8 @@
 from comet_ml import Experiment
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-from utils import load_images, imgDataset, imshow_mult
+from torch.utils.data import DataLoader, Subset
+from utils import load_images, imgDataset, imshow_mult, visualize_seg
 from models import ConvNet, UNet
 import torchmetrics
 import matplotlib.pyplot as plt
@@ -14,10 +14,15 @@ Using 50 for training and 25 for testing
 # Select model: 'unet', 'conv'
 model = 'unet'
 
-experiment = Experiment(project_name="Karen-Semantic-Seg")
-experiment.log_parameters({
-    'model': model
-})
+experiment = Experiment(project_name="Karen-Semantic-Seg", disabled=False)
+params = {
+    'lr': 0.01,
+    'wd': 0,
+    'model': model,
+    'features': [32, 64, 128],
+    'limit_train_samples': 0  # 0 will use full train dataset, 4 will use 4 samples.
+}
+experiment.log_parameters(params)
 
 # Load images from folder
 train_imgs = load_images('data/train/images')
@@ -28,26 +33,29 @@ test_masks = load_images('data/test/masks')
 # Make dataset and apply transforms
 train_data = imgDataset(train_imgs, train_masks)
 test_data = imgDataset(test_imgs, test_masks)
+if params['limit_train_samples']:
+    print('WARNING: Limiting train samples to:', params['limit_train_samples'])
+    train_data = Subset(train_data, range(params['limit_train_samples']))
 
 # Data loaders
 train_loader = DataLoader(train_data, batch_size=8, shuffle=True)
 test_loader = DataLoader(test_data, batch_size=8, shuffle=False)
 
 if model == 'unet':
-    net = UNet()
+    net = UNet(params['features'])
 else:
     net = ConvNet()
 #print(net)
 
 # Loss function and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(net.parameters(), lr=params['lr'], weight_decay=params['wd'])
 
 # Metrics
 accu_train = torchmetrics.Accuracy(num_classes=8)
-iou_train = torchmetrics.IoU(num_classes=8)
+iou_train = torchmetrics.IoU(num_classes=8, absent_score=1.0)
 accu_test = torchmetrics.Accuracy(num_classes=8)
-iou_test = torchmetrics.IoU(num_classes=8)
+iou_test = torchmetrics.IoU(num_classes=8, absent_score=1.0)
 
 train_loss, test_loss = [], []
 accuracy = []

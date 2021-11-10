@@ -6,7 +6,7 @@ import torchvision.transforms.functional as TF
 class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
-        self.features = [8, 16, 32]
+        self.features = [32, 64, 128]
         self.encoder = nn.ModuleList()
         self.decoder = nn.ModuleList()
         # maxpool
@@ -49,11 +49,10 @@ class DoubleConv(nn.Module):
 
 # UNet model
 class UNet(nn.Module):
-    def __init__(self):
+    def __init__(self, features):
         super(UNet, self).__init__()
         in_channels = 3
         out_channels = 8
-        features = [16, 32, 64]
 
         self.ups = nn.ModuleList()
         self.downs = nn.ModuleList()
