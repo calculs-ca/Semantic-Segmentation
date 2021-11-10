@@ -59,10 +59,13 @@ iou_test = torchmetrics.IoU(num_classes=8, absent_score=1.0)
 
 train_loss, test_loss = [], []
 accuracy = []
-epochs = 30
+epochs = 50
 for epoch in range(epochs):
     net.train()
     running_loss = 0.
+
+    accu_train.reset()
+    iou_train.reset()
 
     for image, mask in train_loader:
         mask = torch.squeeze(mask, dim=1)
@@ -75,26 +78,32 @@ for epoch in range(epochs):
 
         running_loss += loss.item()
 
-        accu_train_val = accu_train(output, mask)
-        experiment.log_metric('accu_train', accu_train_val)
-        iou_train_val = iou_train(output, mask)
-        experiment.log_metric('iou_train', iou_train_val)
+        accu_train(output, mask)
+        iou_train(output, mask)
+
+    experiment.log_metric('accu_train', accu_train.compute(), step=epoch)
+    experiment.log_metric('iou_train', iou_train.compute(), step=epoch)
+
+    viz = visualize_seg(image[0], output[0], mask[0])
+    experiment.log_image(viz, step=epoch)
 
     train_loss.append(running_loss/len(train_loader.dataset))
 
     net.eval()
     correct_class = 0
     test_running_loss = 0
+
+    accu_test.reset()
+    iou_test.reset()
+
     for image, mask in test_loader:
         mask = torch.squeeze(mask, dim=1)
         output = net(image)
         loss = criterion(output, mask)
         test_running_loss += loss.item()
 
-        accu_test_val = accu_test(output, mask)
-        experiment.log_metric('accu_test', accu_test_val)
-        iou_test_val = iou_test(output, mask)
-        experiment.log_metric('iou_test', iou_test_val)
+        accu_test(output, mask)
+        iou_test(output, mask)
 
         total_pixels = image.size()[-1] * image.size()[-2]
         top_class = torch.argmax(output, 1)
@@ -110,6 +119,9 @@ for epoch in range(epochs):
             #print('Accuracy: %.2f' %val)
     test_loss.append(test_running_loss/len(test_loader.dataset))
     accuracy.append(correct_class/len(test_loader.dataset))
+
+    experiment.log_metric('accu_test', accu_test.compute(), step=epoch)
+    experiment.log_metric('iou_test', iou_test.compute(), step=epoch)
 
     print('[epoch', epoch+1, '] Training loss: %.5f' %train_loss[-1], ' Validation loss: %.5f' %test_loss[-1])
     print('     Accuracy: %.2f' %accuracy[-1], '%')
