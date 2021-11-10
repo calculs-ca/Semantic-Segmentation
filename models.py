@@ -1,11 +1,7 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torchvision.transforms.functional as TF
-"""
-Input images have 3 channels RGB
-Classes: 8, BW-000, HD-001, PF-010, WR-011, RO-100, RI-101, FV-110, SR-111
-"""
+
 # Fully Convolutional model
 class ConvNet(nn.Module):
     def __init__(self):
