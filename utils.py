@@ -6,7 +6,10 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from natsort import natsorted
-
+"""
+Input images have 3 channels RGB
+Classes: 8, BW-000, HD-001, PF-010, WR-011, RO-100, RI-101, FV-110, SR-111
+"""
 def load_images(path):
     images = []
     img_list = natsorted(os.listdir(path))
@@ -32,7 +35,7 @@ def imshow(img):
 
 # Show input image, ground truth and model output
 def imshow_mult(imgs, titles=None):
-    fig = plt.figure(figsize=(7, 5))
+    fig = plt.figure(figsize=(6, 5))
     rows = 1
     cols = len(imgs)
     for i in range(cols):
@@ -57,22 +60,9 @@ maskTransform = transforms.Compose([
             transforms.Resize((128, 128)),
             ])
 
-def listToString(arr):
-    s = ''.join([str(item) for item in arr])
-    return s
-
-# rgb labels to int: BW-000, HD-001, PF-010, WR-011, RO-100, RI-101, FV-110, SR-111
-str2int = { '000': 0, '001': 1, '010': 2, '011': 3, '100':4, '101':5, '110': 6, '111': 7}
-
 def label_mask(mask):
-    h, w, ch = mask.shape
-    m = np.zeros((h, w), dtype=int)
-
-    for i in range(h):
-        for j in range(w):
-            arr = [0 if item == 0 else 1 for item in mask[i][j]]
-            m[i][j] = str2int[listToString(arr)]
-    return m
+    mask = np.sum(mask.astype(bool)*[4, 2, 1], axis=-1)
+    return mask
 
 # Images dataset
 class imgDataset(Dataset):
