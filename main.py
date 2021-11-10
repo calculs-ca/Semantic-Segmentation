@@ -22,8 +22,8 @@ train_data = imgDataset(train_imgs, train_masks)
 test_data = imgDataset(test_imgs, test_masks)
 
 # Data loaders
-train_loader = DataLoader(train_data, batch_size=1, shuffle=True)
-test_loader = DataLoader(test_data, batch_size=1, shuffle=True)
+train_loader = DataLoader(train_data, batch_size=8, shuffle=True)
+test_loader = DataLoader(test_data, batch_size=8, shuffle=False)
 
 if model == 'unet':
     net = UNet()
@@ -82,9 +82,10 @@ for epoch in range(epochs):
     print('     Accuracy: %.2f' %accuracy[-1], '%')
 
 # Show example: input image, mask and output
-img, mask = next(iter(test_loader))
-output = torch.argmax(net(img), 1)
-imshow_mult([img, mask, output], ['Input', 'Label', 'Prediction'])
+img_batch, mask_batch = next(iter(test_loader))
+output = torch.argmax(net(img_batch), 1)
+img, mask, pred = img_batch[0], mask_batch[0], output[0]
+imshow_mult([img, mask, pred], ['Input', 'Label', 'Prediction'])
 
 # Plots
 epochs_arr = [i+1 for i in range(epochs)]
