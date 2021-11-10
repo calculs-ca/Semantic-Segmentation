@@ -3,9 +3,11 @@ import cv2
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from natsort import natsorted
+from tqdm import tqdm
 
 def load_images(path):
     images = []
@@ -50,21 +52,18 @@ def listToString(arr):
 # rgb labels to int: BW-000, HD-001, PF-010, WR-011, RO-100, RI-101, FV-110, SR-111
 str2int = { '000': 0, '001': 1, '010': 2, '011': 3, '100':4, '101':5, '110': 6, '111': 7}
 
-def label_mask(mask):
-    h, w, ch = mask.shape
-    m = np.zeros((h, w), dtype=int)
+# 1 0 1
+# 4 2 1
+# 4 0 1 = 5
 
-    for i in range(h):
-        for j in range(w):
-            arr = [0 if item == 0 else 1 for item in mask[i][j]]
-            m[i][j] = str2int[listToString(arr)]
-    return m
+def label_mask(mask):
+    return (mask.astype(bool) * [4, 2, 1]).sum(axis=-1)
 
 # Images dataset
 class imgDataset(Dataset):
     def __init__(self, images, masks):
-        self.images = [imgTransform(img) for img in images]
-        self.masks = [maskTransform(label_mask(mask)) for mask in masks]
+        self.images = [imgTransform(img) for img in tqdm(images)]
+        self.masks = [maskTransform(label_mask(mask)) for mask in tqdm(masks)]
 
 
     def __len__(self):
@@ -72,3 +71,25 @@ class imgDataset(Dataset):
 
     def __getitem__(self, i):
         return self.images[i], self.masks[i]
+
+
+def visualize_seg(image, seg_pred, seg_true):
+    def t(img):
+        return (img * 127 + 127).to(torch.uint8)
+
+    colors = ['#000000', '#0000FF', '#00FF00', '#00FFFF', '#FF0000', '#FF00FF', '#FFFF00', '#FFFFFF']
+
+    image = t(image)
+
+    seg_true = torchvision.utils.draw_segmentation_masks(
+        image,
+        torch.nn.functional.one_hot(seg_true, num_classes=8).to(torch.bool).transpose(-1, 0), colors=colors
+    )
+    seg_pred = torchvision.utils.draw_segmentation_masks(
+        image,
+        torch.nn.functional.one_hot(seg_pred.argmax(0), num_classes=8).to(torch.bool).transpose(-1, 0), colors=colors
+    )
+    g = torchvision.utils.make_grid([seg_true, seg_pred])
+    return g.moveaxis(0, -1)
+
+
