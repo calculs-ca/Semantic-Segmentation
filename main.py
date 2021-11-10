@@ -42,8 +42,12 @@ else:
 # Loss function and optimizer
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
+
+# Metrics
 accu_train = torchmetrics.Accuracy(num_classes=8)
 iou_train = torchmetrics.IoU(num_classes=8)
+accu_test = torchmetrics.Accuracy(num_classes=8)
+iou_test = torchmetrics.IoU(num_classes=8)
 
 train_loss, test_loss = [], []
 accuracy = []
@@ -62,6 +66,12 @@ for epoch in range(epochs):
         optimizer.step()
 
         running_loss += loss.item()
+
+        accu_train_val = accu_train(output, mask)
+        experiment.log_metric('accu_train', accu_train_val)
+        iou_train_val = iou_train(output, mask)
+        experiment.log_metric('iou_train', iou_train_val)
+
     train_loss.append(running_loss/len(train_loader.dataset))
 
     net.eval()
@@ -73,10 +83,10 @@ for epoch in range(epochs):
         loss = criterion(output, mask)
         test_running_loss += loss.item()
 
-        accu_train_val = accu_train(output, mask)
-        experiment.log_metric('accu_train', accu_train_val)
-        iou_train_val = iou_train(output, mask)
-        experiment.log_metric('iou_train', iou_train_val)
+        accu_test_val = accu_test(output, mask)
+        experiment.log_metric('accu_test', accu_test_val)
+        iou_test_val = iou_test(output, mask)
+        experiment.log_metric('iou_test', iou_test_val)
 
         total_pixels = image.size()[-1] * image.size()[-2]
         top_class = torch.argmax(output, 1)
