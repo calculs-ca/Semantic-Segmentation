@@ -16,11 +16,13 @@ Using 50 for training and 25 for testing
 model = 'unet'
 
 params = {
-    'epochs': 40,
-    'lr': 0.01,
-    'wd': 0,
+    'do_hpo': False,
+    'epochs': 200,
+    'batch_size': 16,
+    'lr': 1.10e-4,
+    'wd': 5.87e-5,
     'model': model,
-    'features': [32, 64, 128],
+    'features': [64, 128, 256],
     'limit_train_samples': 0  # 0 will use full train dataset, 4 will use 4 samples.
 }
 
@@ -41,11 +43,14 @@ if params['limit_train_samples']:
 def objective(trial):
     """Train the model using the param suggestions from Optuna"""
     width = trial.suggest_categorical('width', [32, 64, 96])
+    features = [width, width * 2, width * 4]
     params.update({
+        'optuna_study': trial.study.study_name,
+        'optuna_trial': trial.number,
         'lr': trial.suggest_loguniform('lr', 1e-4, 1e-2),
         'batch_size': trial.suggest_categorical('batch_size', [16, 24, 32]),
         'wd': trial.suggest_loguniform('wd', 1e-8, 1e-4),
-        'features': [width, width * 2, width * 4]
+        'features': features
     })
     iou_test_val = train(params)
     return iou_test_val
@@ -151,8 +156,7 @@ def train(params):
 
 
 def main():
-    do_hpo = False
-    if do_hpo:
+    if params['do_hpo']:
         study = optuna.create_study(direction='maximize')
         study.optimize(objective, n_trials=100)  # Maximize Test IoU
         torch.save(study.best_params, 'best_params.pkl')
