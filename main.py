@@ -16,6 +16,7 @@ model = 'unet'
 
 experiment = Experiment(project_name="Karen-Semantic-Seg", disabled=False)
 params = {
+    'epochs': 100,
     'lr': 0.01,
     'wd': 0,
     'model': model,
@@ -52,15 +53,17 @@ criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=params['lr'], weight_decay=params['wd'])
 
 # Metrics
-accu_train = torchmetrics.Accuracy(num_classes=8)
-iou_train = torchmetrics.IoU(num_classes=8, absent_score=1.0)
-accu_test = torchmetrics.Accuracy(num_classes=8)
-iou_test = torchmetrics.IoU(num_classes=8, absent_score=1.0)
+accu_train = torchmetrics.Accuracy(num_classes=8).cuda()
+iou_train = torchmetrics.IoU(num_classes=8, absent_score=1.0).cuda()
+accu_test = torchmetrics.Accuracy(num_classes=8).cuda()
+iou_test = torchmetrics.IoU(num_classes=8, absent_score=1.0).cuda()
+
+net.cuda()
+criterion.cuda()
 
 train_loss, test_loss = [], []
 accuracy = []
-epochs = 50
-for epoch in range(epochs):
+for epoch in range(params['epochs']):
     net.train()
     running_loss = 0.
 
@@ -68,7 +71,8 @@ for epoch in range(epochs):
     iou_train.reset()
 
     for image, mask in train_loader:
-        mask = torch.squeeze(mask, dim=1)
+        image = image.cuda()
+        mask = torch.squeeze(mask, dim=1).cuda()
         optimizer.zero_grad()
 
         output = net(image)
@@ -84,7 +88,7 @@ for epoch in range(epochs):
     experiment.log_metric('accu_train', accu_train.compute(), step=epoch)
     experiment.log_metric('iou_train', iou_train.compute(), step=epoch)
 
-    viz = visualize_seg(image[0], output[0], mask[0])
+    viz = visualize_seg(image[0].cpu(), output[0].cpu(), mask[0].cpu())
     experiment.log_image(viz, step=epoch)
 
     train_loss.append(running_loss/len(train_loader.dataset))
@@ -97,7 +101,8 @@ for epoch in range(epochs):
     iou_test.reset()
 
     for image, mask in test_loader:
-        mask = torch.squeeze(mask, dim=1)
+        image = image.cuda()
+        mask = torch.squeeze(mask, dim=1).cuda()
         output = net(image)
         loss = criterion(output, mask)
         test_running_loss += loss.item()
