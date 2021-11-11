@@ -39,6 +39,7 @@ if params['limit_train_samples']:
 
 
 def objective(trial):
+    """Train the model using the param suggestions from Optuna"""
     width = trial.suggest_categorical('width', [32, 64, 96])
     params.update({
         'lr': trial.suggest_loguniform('lr', 1e-4, 1e-2),
@@ -46,7 +47,11 @@ def objective(trial):
         'wd': trial.suggest_loguniform('wd', 1e-8, 1e-4),
         'features': [width, width * 2, width * 4]
     })
+    iou_test_val = train(params)
+    return iou_test_val
 
+
+def train(params):
     experiment = Experiment(project_name="Karen-Semantic-Seg", disabled=False)
     experiment.log_parameters(params)
 
@@ -146,10 +151,13 @@ def objective(trial):
 
 
 def main():
-    study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=480)
-
-    torch.save(study.best_params, 'best_params.pkl')
+    do_hpo = False
+    if do_hpo:
+        study = optuna.create_study(direction='maximize')
+        study.optimize(objective, n_trials=100)  # Maximize Test IoU
+        torch.save(study.best_params, 'best_params.pkl')
+    else:
+        train(params)
 
 
 if __name__ == '__main__':
