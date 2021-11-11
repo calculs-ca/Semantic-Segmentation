@@ -1,0 +1,7 @@
+torch
+torchvision
+torchmetrics
+comet_ml
+matplotlib
+natsort
+Pillow
