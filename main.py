@@ -125,24 +125,3 @@ for epoch in range(epochs):
 
     print('[epoch', epoch+1, '] Training loss: %.5f' %train_loss[-1], ' Validation loss: %.5f' %test_loss[-1])
     print('     Accuracy: %.2f' %accuracy[-1], '%')
-
-# Show example: input image, mask and output
-img_batch, mask_batch = next(iter(test_loader))
-output = torch.argmax(net(img_batch), 1)
-img, mask, pred = img_batch[0], mask_batch[0], output[0]
-imshow_mult([img, mask, pred], ['Input', 'Label', 'Prediction'])
-
-# Plots
-epochs_arr = [i+1 for i in range(epochs)]
-plt.figure()
-
-plt.subplot(211)
-plt.plot(epochs_arr, train_loss, label='Training loss')
-plt.plot(epochs_arr, test_loss, label='Validation loss')
-plt.legend()
-
-plt.subplot(212)
-plt.plot(epochs_arr, accuracy, label='Accuracy %')
-plt.legend()
-
-plt.show()
