@@ -12,10 +12,11 @@ Using 50 for training and 25 for testing
 model = 'conv'
 
 # Load images from folder
-train_imgs = load_images('data/train/images')
-train_masks = load_images('data/train/masks')
-test_imgs = load_images('data/test/images')
-test_masks = load_images('data/test/masks')
+folder_path = '/home/karen/Documents/data'
+train_imgs = load_images(folder_path+'/train/images')
+train_masks = load_images(folder_path+'/train/masks')
+test_imgs = load_images(folder_path+'/test/images')
+test_masks = load_images(folder_path+'/test/masks')
 
 # Make dataset and apply transforms
 train_data = imgDataset(train_imgs, train_masks)
