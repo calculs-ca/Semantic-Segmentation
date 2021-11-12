@@ -39,7 +39,7 @@ def prepare_data():
     train_masks = load_images(dataset_trainval_path / 'masks')
 
     # Make dataset and apply transforms
-    trainval_dataset = imgDataset(train_imgs, train_masks, use_da=True)
+    trainval_dataset = imgDataset(train_imgs, train_masks, use_da=params['use_da'])
     val_size = int(len(trainval_dataset) * 0.2)
     train_size = len(trainval_dataset) - val_size
     train_data, test_data = random_split(trainval_dataset, [train_size, val_size],
@@ -122,8 +122,10 @@ def train(params, train_data, test_data):
         experiment.log_metric('accu_train', accu_train.compute(), step=epoch)
         experiment.log_metric('iou_train', iou_train.compute(), step=epoch)
 
-        viz = visualize_seg(image[0].cpu(), output[0].cpu(), mask[0].cpu())
-        experiment.log_image(viz, step=epoch)
+        if epoch % 10 == 0:
+            for i in range(4):
+                viz = visualize_seg(image[i].cpu(), output[i].cpu(), mask[i].cpu())
+                experiment.log_image(viz, name='trn', step=epoch)
 
         train_loss.append(running_loss/len(train_loader.dataset))
 
@@ -163,13 +165,20 @@ def train(params, train_data, test_data):
         experiment.log_metric('accu_test', accu_test.compute(), step=epoch)
         experiment.log_metric('iou_test', iou_test_val, step=epoch)
 
+        if epoch % 10 == 0:
+            for i in range(10):
+                viz = visualize_seg(image[i].cpu(), output[i].cpu(), mask[i].cpu())
+                experiment.log_image(viz, name='val', step=epoch)
+
     experiment.end()
     return iou_test_val
 
 
 def main():
+    print('Preparing data')
     train_data, test_data = prepare_data()
 
+    print('Launching training')
     if params['do_hpo']:
         study = optuna.create_study(storage='sqlite:///optuna.db', direction='maximize')
 
