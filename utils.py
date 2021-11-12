@@ -4,13 +4,19 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import torchvision
-import torchvision.transforms as transforms
+from torchvision import transforms
+from torchvision.transforms import functional as func_transforms
 from torch.utils.data import Dataset
 from natsort import natsorted
+from tqdm import tqdm
+
 """
 Input images have 3 channels RGB
 Classes: 8, BW-000, HD-001, PF-010, WR-011, RO-100, RI-101, FV-110, SR-111
 """
+
+IMG_SIZE = 128
+
 def load_images(path):
     images = []
     img_list = natsorted(os.listdir(path))
@@ -51,14 +57,14 @@ def imshow_mult(imgs, titles=None):
 # Input image transforms
 imgTransform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize((128, 128)),
+            transforms.Resize((IMG_SIZE, IMG_SIZE)),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
             ])
 
 # Mask transforms
 maskTransform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize((128, 128)),
+            transforms.Resize((IMG_SIZE, IMG_SIZE)),
             ])
 
 def label_mask(mask):
@@ -67,15 +73,32 @@ def label_mask(mask):
 
 # Images dataset
 class imgDataset(Dataset):
-    def __init__(self, images, masks):
-        self.images = [imgTransform(img) for img in images]
-        self.masks = [maskTransform(label_mask(mask)) for mask in masks]
+    def __init__(self, images, masks, use_da=False):
+        self.use_da = use_da
+        self.images = [imgTransform(img) for img in tqdm(images)]
+        self.masks = [maskTransform(label_mask(mask)) for mask in tqdm(masks)]
 
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, i):
-        return self.images[i], self.masks[i]
+        img = self.images[i]
+        gt = self.masks[i]
+
+        if self.use_da:
+            # Apply transforms (data augmentation)
+            params = transforms.RandomAffine.get_params(
+                [-45, 45],  # Rotation: -30, 30 degrees
+                None,  # Translation
+                [0.8, 1.2],  # Scale
+                None,  # Shear
+                img_size=[IMG_SIZE, IMG_SIZE]
+            )
+            img = func_transforms.affine(img, *params, interpolation=transforms.InterpolationMode.BILINEAR)
+            gt = func_transforms.affine(gt.unsqueeze(0), *params, interpolation=transforms.InterpolationMode.NEAREST)
+            gt = gt[0]
+
+        return img, gt
 
 
 def visualize_seg(image, seg_pred, seg_true):

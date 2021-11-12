@@ -1,7 +1,10 @@
+import os
+from pathlib import Path
+
 from comet_ml import Experiment
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, random_split
 from utils import load_images, imgDataset, imshow_mult, visualize_seg
 from models import ConvNet, UNet
 import torchmetrics
@@ -17,52 +20,61 @@ model = 'unet'
 
 params = {
     'do_hpo': False,
+    'n_hpo_trials': 100,
     'epochs': 200,
     'batch_size': 16,
     'lr': 1.10e-4,
     'wd': 5.87e-5,
     'model': model,
     'features': [64, 128, 256],
-    'limit_train_samples': 0  # 0 will use full train dataset, 4 will use 4 samples.
+    'limit_train_samples': 0,  # 0 will use full train dataset, 4 will use 4 samples.
+    'use_da': True
 }
 
-# Load images from folder
-train_imgs = load_images('data/train/images')
-train_masks = load_images('data/train/masks')
-test_imgs = load_images('data/test/images')
-test_masks = load_images('data/test/masks')
 
-# Make dataset and apply transforms
-train_data = imgDataset(train_imgs, train_masks)
-test_data = imgDataset(test_imgs, test_masks)
-if params['limit_train_samples']:
-    print('WARNING: Limiting train samples to:', params['limit_train_samples'])
-    train_data = Subset(train_data, range(params['limit_train_samples']))
+def prepare_data():
+    # Load images from folder
+    dataset_trainval_path = Path(os.environ['SUIM']) / 'train_val'
+    train_imgs = load_images(dataset_trainval_path / 'images')
+    train_masks = load_images(dataset_trainval_path / 'masks')
+
+    # Make dataset and apply transforms
+    trainval_dataset = imgDataset(train_imgs, train_masks, use_da=True)
+    val_size = int(len(trainval_dataset) * 0.2)
+    train_size = len(trainval_dataset) - val_size
+    train_data, test_data = random_split(trainval_dataset, [train_size, val_size],
+                                         generator=torch.Generator().manual_seed(42))
+    # TODO disable DA for val/test ?
+    if params['limit_train_samples']:
+        print('WARNING: Limiting train samples to:', params['limit_train_samples'])
+        train_data = Subset(train_data, range(params['limit_train_samples']))
+
+    return train_data, test_data
 
 
-def objective(trial):
+def train_trial(trial, train_data, test_data):
     """Train the model using the param suggestions from Optuna"""
     width = trial.suggest_categorical('width', [32, 64, 96])
     features = [width, width * 2, width * 4]
     params.update({
         'optuna_study': trial.study.study_name,
         'optuna_trial': trial.number,
-        'lr': trial.suggest_loguniform('lr', 1e-4, 1e-2),
+        'lr': trial.suggest_loguniform('lr', 1e-5, 1e-3),
         'batch_size': trial.suggest_categorical('batch_size', [16, 24, 32]),
-        'wd': trial.suggest_loguniform('wd', 1e-8, 1e-4),
+        'wd': trial.suggest_loguniform('wd', 1e-7, 1e-3),
         'features': features
     })
-    iou_test_val = train(params)
+    iou_test_val = train(params, train_data, test_data)
     return iou_test_val
 
 
-def train(params):
+def train(params, train_data, test_data):
     experiment = Experiment(project_name="Karen-Semantic-Seg", disabled=False)
     experiment.log_parameters(params)
 
     # Data loaders
-    train_loader = DataLoader(train_data, batch_size=params['batch_size'], shuffle=True)
-    test_loader = DataLoader(test_data, batch_size=params['batch_size'], shuffle=False)
+    train_loader = DataLoader(train_data, batch_size=params['batch_size'], shuffle=True, pin_memory=True)
+    test_loader = DataLoader(test_data, batch_size=params['batch_size'], shuffle=False, pin_memory=True)
 
     if model == 'unet':
         net = UNet(params['features'])
@@ -156,12 +168,18 @@ def train(params):
 
 
 def main():
+    train_data, test_data = prepare_data()
+
     if params['do_hpo']:
-        study = optuna.create_study(direction='maximize')
-        study.optimize(objective, n_trials=100)  # Maximize Test IoU
+        study = optuna.create_study(storage='sqlite:///optuna.db', direction='maximize')
+
+        def objective(trial):
+            return train_trial(trial, train_data, test_data)
+
+        study.optimize(objective, n_trials=params['n_hpo_trials'])  # Maximize Test IoU
         torch.save(study.best_params, 'best_params.pkl')
     else:
-        train(params)
+        train(params, train_data, test_data)
 
 
 if __name__ == '__main__':
