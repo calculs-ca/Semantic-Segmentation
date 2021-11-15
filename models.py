@@ -6,7 +6,7 @@ import torchvision.transforms.functional as TF
 class ConvNet(nn.Module):
     def __init__(self):
         super(ConvNet, self).__init__()
-        self.features = [8, 16, 32]
+        self.features = [8, 16, 32, 64]
         self.encoder = nn.ModuleList()
         self.decoder = nn.ModuleList()
         # maxpool
@@ -26,9 +26,11 @@ class ConvNet(nn.Module):
         for step in self.encoder:
             x = step(x)
             x = self.pool(x)
+        
         x = self.bottom(x)
         for step in self.decoder:
             x = step(x)
+
         return x
 
 # Double convolution with batch normalization
