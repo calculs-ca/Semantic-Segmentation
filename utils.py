@@ -35,7 +35,7 @@ def imshow(img):
 
 # Show input image, ground truth and model output
 def imshow_mult(imgs, titles=None):
-    fig = plt.figure(figsize=(6, 5))
+    fig = plt.figure(figsize=(8, 3))
     rows = 1
     cols = len(imgs)
     for i in range(cols):
