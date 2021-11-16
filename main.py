@@ -1,13 +1,29 @@
+from comet_ml import Experiment
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from utils import load_images, imgDataset, imshow_mult
+from utils import load_images, imgDataset, imshow_mult, read_json
 from models import ConvNet, UNet
 import matplotlib.pyplot as plt
 """
 Dataset: Underwater imagery (SUIM)
 Using 50 for training and 25 for testing
 """
+# Create comet experiment
+exp_param = read_json('/home/karen/Documents/experiment.json')
+experiment = Experiment(
+    api_key=exp_param["api_key"],
+    project_name=exp_param["project_name"],
+    workspace=exp_param["workspace"],
+)
+# Hyperparameters
+params = {
+    "learning_rate": 0.001,
+    "batch_size": 8,
+    "epochs": 10
+}
+experiment.log_parameters(params)
+
 # Select model: 'unet', 'conv'
 model = 'conv'
 
@@ -23,8 +39,8 @@ train_data = imgDataset(train_imgs, train_masks)
 test_data = imgDataset(test_imgs, test_masks)
 
 # Data loaders
-train_loader = DataLoader(train_data, batch_size=8, shuffle=True)
-test_loader = DataLoader(test_data, batch_size=8, shuffle=False)
+train_loader = DataLoader(train_data, batch_size=params["batch_size"], shuffle=True)
+test_loader = DataLoader(test_data, batch_size=params["batch_size"], shuffle=False)
 
 if model == 'unet':
     net = UNet()
@@ -34,11 +50,11 @@ print(net)
 
 # Loss function and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
+optimizer = torch.optim.Adam(net.parameters(), lr=params["learning_rate"])
 
 train_loss, test_loss = [], []
 accuracy = []
-epochs = 30
+epochs = params["epochs"]
 for epoch in range(epochs):
     net.train()
     running_loss = 0.
@@ -83,9 +99,10 @@ for epoch in range(epochs):
     print('     Accuracy: %.2f' %accuracy[-1], '%')
 
 # Show example: input image, mask and output
+net.eval()
 img_batch, mask_batch = next(iter(test_loader))
 output = torch.argmax(net(img_batch), 1)
-img, mask, pred = img_batch[0], mask_batch[0], output[0]
+img, mask, pred = img_batch[1], mask_batch[1], output[1]
 imshow_mult([img, mask, pred], ['Input', 'Label', 'Prediction'])
 
 # Plots
