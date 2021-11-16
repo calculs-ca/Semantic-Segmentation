@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset
 from natsort import natsorted
+import json
 """
 Input images have 3 channels RGB
 Classes: 8, BW-000, HD-001, PF-010, WR-011, RO-100, RI-101, FV-110, SR-111
@@ -75,3 +76,9 @@ class imgDataset(Dataset):
 
     def __getitem__(self, i):
         return self.images[i], self.masks[i]
+
+# Read json file
+def read_json(path):
+    f = open(path)
+    data = json.load(f)
+    return data
