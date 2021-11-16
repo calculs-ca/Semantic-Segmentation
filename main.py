@@ -52,16 +52,20 @@ def prepare_data():
     return train_data, test_data
 
 
-def train_trial(trial, train_data, test_data):
+def train_trial(trial: optuna.Trial, train_data, test_data):
     """Train the model using the param suggestions from Optuna"""
     width = trial.suggest_categorical('width', [32, 64, 96])
     features = [width, width * 2, width * 4]
+    log_lr = trial.suggest_uniform('log_lr', -5, -3)
+    log_wd = trial.suggest_uniform('log_wd', -7, -3)
     params.update({
         'optuna_study': trial.study.study_name,
         'optuna_trial': trial.number,
-        'lr': trial.suggest_loguniform('lr', 1e-5, 1e-3),
+        'log_lr': log_lr,
+        'log_wd': log_wd,
+        'lr': 10 ** log_lr,
+        'wd': 10 ** log_wd,
         'batch_size': trial.suggest_categorical('batch_size', [16, 24, 32]),
-        'wd': trial.suggest_loguniform('wd', 1e-7, 1e-3),
         'features': features
     })
     iou_test_val = train(params, train_data, test_data)
@@ -73,7 +77,7 @@ def train(params, train_data, test_data):
     experiment.log_parameters(params)
 
     # Data loaders
-    train_loader = DataLoader(train_data, batch_size=params['batch_size'], shuffle=True, pin_memory=True)
+    train_loader = DataLoader(train_data, batch_size=params['batch_size'], shuffle=True, pin_memory=True, drop_last=True)
     test_loader = DataLoader(test_data, batch_size=params['batch_size'], shuffle=False, pin_memory=True)
 
     if model == 'unet':
@@ -166,7 +170,7 @@ def train(params, train_data, test_data):
         experiment.log_metric('iou_test', iou_test_val, step=epoch)
 
         if epoch % 10 == 0:
-            for i in range(10):
+            for i in range(min(10, len(image))):
                 viz = visualize_seg(image[i].cpu(), output[i].cpu(), mask[i].cpu())
                 experiment.log_image(viz, name='val', step=epoch)
 
