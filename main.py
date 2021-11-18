@@ -1,8 +1,9 @@
 from comet_ml import Experiment
+import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from utils import load_images, imgDataset, imshow_mult, read_json
+from utils import load_images, imgDataset, imshow_mult
 from models import ConvNet, UNet
 import matplotlib.pyplot as plt
 """
@@ -10,11 +11,10 @@ Dataset: Underwater imagery (SUIM)
 Using 50 for training and 25 for testing
 """
 # Create comet experiment
-exp_param = read_json('/home/karen/Documents/experiment.json')
 experiment = Experiment(
-    api_key=exp_param["api_key"],
-    project_name=exp_param["project_name"],
-    workspace=exp_param["workspace"],
+    api_key=os.environ['API_KEY'],
+    project_name="semantic-segmentation",
+    workspace=os.environ['WORKSPACE'],
 )
 # Hyperparameters
 params = {
