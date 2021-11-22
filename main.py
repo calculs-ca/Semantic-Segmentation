@@ -2,7 +2,7 @@ from comet_ml import Experiment
 import os
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from utils import load_images, imgDataset, imshow_mult
 from models import ConvNet, UNet
 import matplotlib.pyplot as plt
@@ -29,17 +29,21 @@ model = 'conv'
 
 # Load images from folder
 folder_path = '/home/karen/Documents/data'
-train_imgs = load_images(folder_path+'/train/images')
-train_masks = load_images(folder_path+'/train/masks')
+trainval_imgs = load_images(folder_path+'/train/images')
+trainval_masks = load_images(folder_path+'/train/masks')
 test_imgs = load_images(folder_path+'/test/images')
 test_masks = load_images(folder_path+'/test/masks')
 
 # Make dataset and apply transforms
-train_data = imgDataset(train_imgs, train_masks)
+trainval_data = imgDataset(trainval_imgs, trainval_masks)
+train_size = int(0.8 * len(trainval_data))
+val_size = len(trainval_data) - train_size
+train_data, val_data = random_split(trainval_data, [train_size, val_size])
 test_data = imgDataset(test_imgs, test_masks)
 
 # Data loaders
 train_loader = DataLoader(train_data, batch_size=params["batch_size"], shuffle=True)
+val_loader = DataLoader(val_data, batch_size=params["batch_size"], shuffle=True)
 test_loader = DataLoader(test_data, batch_size=params["batch_size"], shuffle=False)
 
 if model == 'unet':
@@ -73,12 +77,12 @@ for epoch in range(epochs):
 
     net.eval()
     correct_class = 0
-    test_running_loss = 0
-    for image, mask in test_loader:
+    val_running_loss = 0
+    for image, mask in val_loader:
         mask = torch.squeeze(mask, dim=1)
         output = net(image)
         loss = criterion(output, mask)
-        test_running_loss += loss.item()
+        val_running_loss += loss.item()
 
         total_pixels = image.size()[-1] * image.size()[-2]
         top_class = torch.argmax(output, 1)
@@ -92,7 +96,7 @@ for epoch in range(epochs):
             val = (equals.sum().item()*100)/total_pixels
             correct_class += val
             #print('Accuracy: %.2f' %val)
-    test_loss.append(test_running_loss/len(test_loader.dataset))
+    test_loss.append(val_running_loss/len(test_loader.dataset))
     accuracy.append(correct_class/len(test_loader.dataset))
 
     print('[epoch', epoch+1, '] Training loss: %.5f' %train_loss[-1], ' Validation loss: %.5f' %test_loss[-1])
