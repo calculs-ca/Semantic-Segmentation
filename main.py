@@ -2,13 +2,13 @@ from comet_ml import Experiment
 import os
 import torch
 import torch.nn as nn
+from torchmetrics import IoU, Accuracy
 from torch.utils.data import DataLoader, random_split
 from utils import load_images, imgDataset, imshow_mult
 from models import ConvNet, UNet
 import matplotlib.pyplot as plt
 """
 Dataset: Underwater imagery (SUIM)
-Using 50 for training and 25 for testing
 """
 # Create comet experiment
 experiment = Experiment(
@@ -28,7 +28,7 @@ experiment.log_parameters(params)
 model = 'conv'
 
 # Load images from folder
-folder_path = '/home/karen/Documents/data'
+folder_path = os.environ['PATH']
 trainval_imgs = load_images(folder_path+'/train/images')
 trainval_masks = load_images(folder_path+'/train/masks')
 test_imgs = load_images(folder_path+'/test/images')
@@ -56,8 +56,12 @@ print(net)
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(net.parameters(), lr=params["learning_rate"])
 
-train_loss, test_loss = [], []
-accuracy = []
+# Metrics
+iou = IoU(num_classes=8)
+accuracy = Accuracy()
+pixel_accuracy = []
+
+train_loss, val_loss = [], []
 epochs = params["epochs"]
 for epoch in range(epochs):
     net.train()
@@ -89,18 +93,21 @@ for epoch in range(epochs):
         batch_size = image.size()[0]
 
         for i in range(batch_size):
-            m = mask[i]
+            img, m = image[i], mask[i]
+            iou_val = iou(top_class[i], m)
+            val_acc = accuracy(top_class[i], m)
+            experiment.log_metric('IoU', iou_val)
+            experiment.log_metric('val_accuracy', val_acc)
+
             equals = top_class[i] == m.view(*top_class[i].shape)
+            pixelacc_val = (equals.sum().item()*100)/total_pixels
+            correct_class += pixelacc_val
+            #print('Accuracy: %.2f' %pixelacc_val, 'Torch accuracy:', val_acc)
+    val_loss.append(val_running_loss/len(val_loader.dataset))
+    pixel_accuracy.append(correct_class/len(val_loader.dataset))
 
-            #print('Correct class:', equals.sum().item(), '/', total_pixels)
-            val = (equals.sum().item()*100)/total_pixels
-            correct_class += val
-            #print('Accuracy: %.2f' %val)
-    test_loss.append(val_running_loss/len(test_loader.dataset))
-    accuracy.append(correct_class/len(test_loader.dataset))
-
-    print('[epoch', epoch+1, '] Training loss: %.5f' %train_loss[-1], ' Validation loss: %.5f' %test_loss[-1])
-    print('     Accuracy: %.2f' %accuracy[-1], '%')
+    print('[epoch', epoch+1, '] Training loss: %.5f' %train_loss[-1], ' Validation loss: %.5f' %val_loss[-1])
+    print('         Accuracy: %.2f' %pixel_accuracy[-1], '%')
 
 # Show example: input image, mask and output
 net.eval()
@@ -115,11 +122,11 @@ plt.figure()
 
 plt.subplot(211)
 plt.plot(epochs_arr, train_loss, label='Training loss')
-plt.plot(epochs_arr, test_loss, label='Validation loss')
+plt.plot(epochs_arr, val_loss, label='Validation loss')
 plt.legend()
 
 plt.subplot(212)
-plt.plot(epochs_arr, accuracy, label='Accuracy %')
+plt.plot(epochs_arr, pixel_accuracy, label='Accuracy %')
 plt.legend()
 
 plt.show()
