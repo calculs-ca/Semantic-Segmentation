@@ -26,6 +26,8 @@ experiment.log_parameters(params)
 
 # Select model: 'unet', 'conv'
 model = 'conv'
+# Check if cuda is available
+train_on_gpu = torch.cuda.is_available()
 
 # Load images from folder
 folder_path = os.environ['PATH']
@@ -50,7 +52,6 @@ if model == 'unet':
     net = UNet()
 else:
     net = ConvNet()
-print(net)
 
 # Loss function and optimizer
 criterion = nn.CrossEntropyLoss()
@@ -61,13 +62,23 @@ iou = IoU(num_classes=8)
 accuracy = Accuracy()
 pixel_accuracy = []
 
+# If cuda is available
+if train_on_gpu:
+    print('Training on GPU ...')
+    model.cuda()
+    criterion.cuda()
+    iou.cuda()
+    accuracy.cuda()
+
 train_loss, val_loss = [], []
 epochs = params["epochs"]
 for epoch in range(epochs):
-    net.train()
-    running_loss = 0.
+    running_loss, val_running_loss = 0., 0.
 
+    net.train()
     for image, mask in train_loader:
+        if train_on_gpu:
+            image, mask = image.cuda(), mask.cuda()
         mask = torch.squeeze(mask, dim=1)
         optimizer.zero_grad()
 
@@ -77,13 +88,15 @@ for epoch in range(epochs):
         optimizer.step()
 
         running_loss += loss.item()
-    train_loss.append(running_loss/len(train_loader.dataset))
 
+    pixel_acc = 0.
     net.eval()
     correct_class = 0
-    val_running_loss = 0
     for image, mask in val_loader:
+        if train_on_gpu:
+            image, mask = image.cuda(), mask.cuda()
         mask = torch.squeeze(mask, dim=1)
+
         output = net(image)
         loss = criterion(output, mask)
         val_running_loss += loss.item()
@@ -94,17 +107,18 @@ for epoch in range(epochs):
 
         for i in range(batch_size):
             img, m = image[i], mask[i]
+
+            equals = top_class[i] == m.view(*top_class[i].shape)
+            pixel_acc += (equals.sum().item()*100)/total_pixels
             iou_val = iou(top_class[i], m)
             val_acc = accuracy(top_class[i], m)
+            # Log metrics to Comet
             experiment.log_metric('IoU', iou_val)
             experiment.log_metric('val_accuracy', val_acc)
 
-            equals = top_class[i] == m.view(*top_class[i].shape)
-            pixelacc_val = (equals.sum().item()*100)/total_pixels
-            correct_class += pixelacc_val
-            #print('Accuracy: %.2f' %pixelacc_val, 'Torch accuracy:', val_acc)
+    train_loss.append(running_loss / len(train_loader.dataset))
     val_loss.append(val_running_loss/len(val_loader.dataset))
-    pixel_accuracy.append(correct_class/len(val_loader.dataset))
+    pixel_accuracy.append(pixel_acc/len(val_loader.dataset))
 
     print('[epoch', epoch+1, '] Training loss: %.5f' %train_loss[-1], ' Validation loss: %.5f' %val_loss[-1])
     print('         Accuracy: %.2f' %pixel_accuracy[-1], '%')
@@ -126,7 +140,7 @@ plt.plot(epochs_arr, val_loss, label='Validation loss')
 plt.legend()
 
 plt.subplot(212)
-plt.plot(epochs_arr, pixel_accuracy, label='Accuracy %')
+plt.plot(epochs_arr, pixel_accuracy, label='Pixel accuracy %')
 plt.legend()
 
 plt.show()
