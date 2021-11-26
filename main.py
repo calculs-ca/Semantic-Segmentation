@@ -59,8 +59,9 @@ optimizer = torch.optim.Adam(net.parameters(), lr=params["learning_rate"])
 
 # Metrics
 iou = IoU(num_classes=8)
-accuracy = Accuracy()
+accuracy = Accuracy(num_classes=8)
 pixel_accuracy = []
+iou_arr = []
 
 # If cuda is available
 if train_on_gpu:
@@ -105,6 +106,10 @@ for epoch in range(epochs):
         top_class = torch.argmax(output, 1)
         batch_size = image.size()[0]
 
+        iou(output, mask)
+        accuracy(output, mask)
+
+        """
         for i in range(batch_size):
             img, m = image[i], mask[i]
 
@@ -115,20 +120,25 @@ for epoch in range(epochs):
             # Log metrics to Comet
             experiment.log_metric('IoU', iou_val)
             experiment.log_metric('val_accuracy', val_acc)
+        """
+    if epoch%5 == 0:
+        experiment.log_image(top_class[0], name='output')
+    experiment.log_metric('IoU', iou.compute())
+    experiment.log_metric('val_accuracy', accuracy.compute())
 
     train_loss.append(running_loss / len(train_loader.dataset))
     val_loss.append(val_running_loss/len(val_loader.dataset))
     pixel_accuracy.append(pixel_acc/len(val_loader.dataset))
 
     print('[epoch', epoch+1, '] Training loss: %.5f' %train_loss[-1], ' Validation loss: %.5f' %val_loss[-1])
-    print('         Accuracy: %.2f' %pixel_accuracy[-1], '%')
+    print('         Accuracy: %.2f' %accuracy.compute())
 
 # Show example: input image, mask and output
 net.eval()
 img_batch, mask_batch = next(iter(test_loader))
 output = torch.argmax(net(img_batch), 1)
 img, mask, pred = img_batch[1], mask_batch[1], output[1]
-imshow_mult([img, mask, pred], ['Input', 'Label', 'Prediction'])
+#imshow_mult([img, mask, pred], ['Input', 'Label', 'Prediction'])
 
 # Plots
 epochs_arr = [i+1 for i in range(epochs)]
