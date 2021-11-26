@@ -60,8 +60,6 @@ optimizer = torch.optim.Adam(net.parameters(), lr=params["learning_rate"])
 # Metrics
 iou = IoU(num_classes=8)
 accuracy = Accuracy(num_classes=8)
-pixel_accuracy = []
-iou_arr = []
 
 # If cuda is available
 if train_on_gpu:
@@ -90,9 +88,7 @@ for epoch in range(epochs):
 
         running_loss += loss.item()
 
-    pixel_acc = 0.
     net.eval()
-    correct_class = 0
     for image, mask in val_loader:
         if train_on_gpu:
             image, mask = image.cuda(), mask.cuda()
@@ -109,18 +105,6 @@ for epoch in range(epochs):
         iou(output, mask)
         accuracy(output, mask)
 
-        """
-        for i in range(batch_size):
-            img, m = image[i], mask[i]
-
-            equals = top_class[i] == m.view(*top_class[i].shape)
-            pixel_acc += (equals.sum().item()*100)/total_pixels
-            iou_val = iou(top_class[i], m)
-            val_acc = accuracy(top_class[i], m)
-            # Log metrics to Comet
-            experiment.log_metric('IoU', iou_val)
-            experiment.log_metric('val_accuracy', val_acc)
-        """
     if epoch%5 == 0:
         experiment.log_image(top_class[0], name='output')
     experiment.log_metric('IoU', iou.compute())
@@ -128,7 +112,6 @@ for epoch in range(epochs):
 
     train_loss.append(running_loss / len(train_loader.dataset))
     val_loss.append(val_running_loss/len(val_loader.dataset))
-    pixel_accuracy.append(pixel_acc/len(val_loader.dataset))
 
     print('[epoch', epoch+1, '] Training loss: %.5f' %train_loss[-1], ' Validation loss: %.5f' %val_loss[-1])
     print('         Accuracy: %.2f' %accuracy.compute())
@@ -138,19 +121,10 @@ net.eval()
 img_batch, mask_batch = next(iter(test_loader))
 output = torch.argmax(net(img_batch), 1)
 img, mask, pred = img_batch[1], mask_batch[1], output[1]
-#imshow_mult([img, mask, pred], ['Input', 'Label', 'Prediction'])
+imshow_mult([img, mask, pred], ['Input', 'Label', 'Prediction'])
 
 # Plots
 epochs_arr = [i+1 for i in range(epochs)]
-plt.figure()
-
-plt.subplot(211)
 plt.plot(epochs_arr, train_loss, label='Training loss')
 plt.plot(epochs_arr, val_loss, label='Validation loss')
-plt.legend()
-
-plt.subplot(212)
-plt.plot(epochs_arr, pixel_accuracy, label='Pixel accuracy %')
-plt.legend()
-
 plt.show()
