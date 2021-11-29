@@ -1,24 +1,6 @@
-import os
-from PIL import Image
 import torch
-import numpy as np
 import matplotlib.pyplot as plt
-import torchvision.transforms as transforms
 from torch.utils.data import Dataset
-from natsort import natsorted
-"""
-Input images have 3 channels RGB
-Classes: 8, BW-000, HD-001, PF-010, WR-011, RO-100, RI-101, FV-110, SR-111
-"""
-def load_images(path):
-    images = []
-    img_list = natsorted(os.listdir(path))
-    for f in img_list:
-        img_path = os.path.join(path, f)
-        img = np.array(Image.open(img_path).convert('RGB'))
-        if img is not None:
-            images.append(img)
-    return images
 
 def imshow(img):
     img = torch.squeeze(img)
@@ -46,29 +28,11 @@ def imshow_mult(imgs, titles=None):
         plt.title(title)
     plt.show()
 
-
-# Input image transforms
-imgTransform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Resize((128, 128)),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-            ])
-
-# Mask transforms
-maskTransform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Resize((128, 128)),
-            ])
-
-def label_mask(mask):
-    mask = np.sum(mask.astype(bool)*[4, 2, 1], axis=-1)
-    return mask
-
 # Images dataset
 class imgDataset(Dataset):
     def __init__(self, images, masks):
-        self.images = [imgTransform(img) for img in images]
-        self.masks = [maskTransform(label_mask(mask)) for mask in masks]
+        self.images = images
+        self.masks = masks
 
     def __len__(self):
         return len(self.images)
