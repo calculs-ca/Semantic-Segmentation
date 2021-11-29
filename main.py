@@ -4,8 +4,9 @@ import torch
 import torch.nn as nn
 from torchmetrics import IoU, Accuracy
 from torch.utils.data import DataLoader, random_split
-from utils import load_images, imgDataset, imshow_mult
+from utils import imgDataset, imshow_mult
 from models import ConvNet, UNet
+from preprocess import preprocess_images
 import matplotlib.pyplot as plt
 """
 Dataset: Underwater imagery (SUIM)
@@ -22,31 +23,31 @@ params = {
     "batch_size": 8,
     "epochs": 10
 }
-experiment.log_parameters(params)
+#experiment.log_parameters(params)
 
 # Select model: 'unet', 'conv'
 model = 'conv'
 # Check if cuda is available
 train_on_gpu = torch.cuda.is_available()
 
-# Load images from folder
-folder_path = os.environ['PATH']
-trainval_imgs = load_images(folder_path+'/train/images')
-trainval_masks = load_images(folder_path+'/train/masks')
-test_imgs = load_images(folder_path+'/test/images')
-test_masks = load_images(folder_path+'/test/masks')
+preprocess = True
+if preprocess:
+    preprocess_images(os.environ['PATH'])
+prep_data = torch.load('preprocessed_128.pt')
+trainval_imgs = prep_data['images']
+trainval_masks = prep_data['masks']
 
 # Make dataset and apply transforms
 trainval_data = imgDataset(trainval_imgs, trainval_masks)
 train_size = int(0.8 * len(trainval_data))
 val_size = len(trainval_data) - train_size
 train_data, val_data = random_split(trainval_data, [train_size, val_size])
-test_data = imgDataset(test_imgs, test_masks)
+#test_data = imgDataset(test_imgs, test_masks)
 
 # Data loaders
 train_loader = DataLoader(train_data, batch_size=params["batch_size"], shuffle=True)
 val_loader = DataLoader(val_data, batch_size=params["batch_size"], shuffle=True)
-test_loader = DataLoader(test_data, batch_size=params["batch_size"], shuffle=False)
+#test_loader = DataLoader(test_data, batch_size=params["batch_size"], shuffle=False)
 
 if model == 'unet':
     net = UNet()
@@ -118,7 +119,7 @@ for epoch in range(epochs):
 
 # Show example: input image, mask and output
 net.eval()
-img_batch, mask_batch = next(iter(test_loader))
+img_batch, mask_batch = next(iter(val_loader))
 output = torch.argmax(net(img_batch), 1)
 img, mask, pred = img_batch[1], mask_batch[1], output[1]
 imshow_mult([img, mask, pred], ['Input', 'Label', 'Prediction'])
