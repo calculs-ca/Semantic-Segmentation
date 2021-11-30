@@ -23,31 +23,61 @@ params = {
     "batch_size": 8,
     "epochs": 10
 }
-#experiment.log_parameters(params)
+experiment.log_parameters(params)
+
+def prepare_data(preprocess=False):
+    if preprocess:
+        preprocess_images(os.environ['PATH'])
+    prep_data = torch.load('preprocessed_128.pt')
+    trainval_imgs, trainval_masks = prep_data['images'], prep_data['masks']
+
+    # Make dataset and apply transforms
+    trainval_data = imgDataset(trainval_imgs, trainval_masks)
+    train_size = int(0.8 * len(trainval_data))
+    val_size = len(trainval_data) - train_size
+    train_data, val_data = random_split(trainval_data, [train_size, val_size])
+    #test_data = imgDataset(test_imgs, test_masks)
+
+    # Data loaders
+    train_loader = DataLoader(train_data, batch_size=params["batch_size"], shuffle=True)
+    val_loader = DataLoader(val_data, batch_size=params["batch_size"], shuffle=True)
+    #test_loader = DataLoader(test_data, batch_size=params["batch_size"], shuffle=False)
+
+    return train_loader, val_loader
+
+def train_step(data, target, optimizer, criterion, train_on_gpu=False):
+    if train_on_gpu:
+        data, target = data.cuda(), target.cuda()
+    target = torch.squeeze(target, dim=1)
+    optimizer.zero_grad()
+
+    output = net(data)
+    loss = criterion(output, target)
+    loss.backward()
+    optimizer.step()
+
+    return loss.item()
+
+def validation_step(data, target, criterion, metrics, train_on_gpu=False):
+    if train_on_gpu:
+        data, target = data.cuda(), target.cuda()
+    target = torch.squeeze(target, dim=1)
+
+    output = net(data)
+    loss = criterion(output, target)
+
+    for metric in metrics:
+        metric(output, target)
+
+    return loss.item()
 
 # Select model: 'unet', 'conv'
 model = 'conv'
 # Check if cuda is available
 train_on_gpu = torch.cuda.is_available()
+print('Is cuda available?', 'Yes' if train_on_gpu else 'No')
 
-preprocess = True
-if preprocess:
-    preprocess_images(os.environ['PATH'])
-prep_data = torch.load('preprocessed_128.pt')
-trainval_imgs = prep_data['images']
-trainval_masks = prep_data['masks']
-
-# Make dataset and apply transforms
-trainval_data = imgDataset(trainval_imgs, trainval_masks)
-train_size = int(0.8 * len(trainval_data))
-val_size = len(trainval_data) - train_size
-train_data, val_data = random_split(trainval_data, [train_size, val_size])
-#test_data = imgDataset(test_imgs, test_masks)
-
-# Data loaders
-train_loader = DataLoader(train_data, batch_size=params["batch_size"], shuffle=True)
-val_loader = DataLoader(val_data, batch_size=params["batch_size"], shuffle=True)
-#test_loader = DataLoader(test_data, batch_size=params["batch_size"], shuffle=False)
+train_loader, val_loader = prepare_data()
 
 if model == 'unet':
     net = UNet()
@@ -61,6 +91,7 @@ optimizer = torch.optim.Adam(net.parameters(), lr=params["learning_rate"])
 # Metrics
 iou = IoU(num_classes=8)
 accuracy = Accuracy(num_classes=8)
+metrics = [iou, accuracy]
 
 # If cuda is available
 if train_on_gpu:
@@ -77,36 +108,15 @@ for epoch in range(epochs):
 
     net.train()
     for image, mask in train_loader:
-        if train_on_gpu:
-            image, mask = image.cuda(), mask.cuda()
-        mask = torch.squeeze(mask, dim=1)
-        optimizer.zero_grad()
-
-        output = net(image)
-        loss = criterion(output, mask)
-        loss.backward()
-        optimizer.step()
-
-        running_loss += loss.item()
+        running_loss += train_step(image, mask, optimizer, criterion)
 
     net.eval()
     for image, mask in val_loader:
-        if train_on_gpu:
-            image, mask = image.cuda(), mask.cuda()
-        mask = torch.squeeze(mask, dim=1)
-
-        output = net(image)
-        loss = criterion(output, mask)
-        val_running_loss += loss.item()
-
-        total_pixels = image.size()[-1] * image.size()[-2]
-        top_class = torch.argmax(output, 1)
-        batch_size = image.size()[0]
-
-        iou(output, mask)
-        accuracy(output, mask)
+        val_running_loss += validation_step(image, mask, criterion, metrics)
 
     if epoch%5 == 0:
+        output = net(image)
+        top_class = torch.argmax(output, 1)
         experiment.log_image(top_class[0], name='output')
     experiment.log_metric('IoU', iou.compute())
     experiment.log_metric('val_accuracy', accuracy.compute())
