@@ -39,3 +39,10 @@ class imgDataset(Dataset):
 
     def __getitem__(self, i):
         return self.images[i], self.masks[i]
+
+# Show example: input image, mask and output
+def show_example(model, loader):
+    model.eval()
+    img_batch, mask_batch = next(iter(loader))
+    output = torch.argmax(model(img_batch), 1)
+    imshow_mult([img_batch[0], mask_batch[0], output[0]], ['Input', 'Label', 'Prediction'])
