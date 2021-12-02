@@ -11,26 +11,33 @@ class ConvNet(nn.Module):
         self.decoder = nn.ModuleList()
         # maxpool
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        # un-pool
+        self.unpool = nn.ModuleList()
+        # batch norm layers
+        self.batch_norm = nn.ModuleList()
 
         in_channels = 3
         for feature in self.features:
             self.encoder.append(nn.Conv2d(in_channels, feature, 3, padding=1))
             in_channels = feature
+            self.batch_norm.append(nn.BatchNorm2d(feature))
         self.bottom = nn.Conv2d(self.features[-1], self.features[-1]*2, 3, padding=1)
         # out channels = 8
         for feature in reversed(self.features):
             self.decoder.append(nn.Conv2d(feature*2, feature, 3, padding=1))
-            self.decoder.append(nn.ConvTranspose2d(feature, feature, kernel_size=2, stride=2))
+            self.unpool.append(nn.ConvTranspose2d(feature, feature, kernel_size=2, stride=2))
 
     def forward(self, x):
-        for step in self.encoder:
-            x = step(x)
+        for i in range(len(self.features)):
+            x = self.encoder[i](x)
+            x = self.batch_norm[i](x)
             x = self.pool(x)
-        
-        x = self.bottom(x)
-        for step in self.decoder:
-            x = step(x)
 
+        x = self.bottom(x)
+        for i in range(len(self.features)):
+            x = self.decoder[i](x)
+            x = self.batch_norm[-1-i](x)
+            x = self.unpool[i](x)
         return x
 
 # Double convolution with batch normalization
