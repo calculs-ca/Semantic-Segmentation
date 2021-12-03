@@ -18,7 +18,7 @@ params = {
     "model": model,
     "learning_rate": 0.001,
     "batch_size": 8,
-    "epochs": 100
+    "epochs": 10
 }
 # Create comet experiment
 experiment = Experiment(
@@ -128,6 +128,9 @@ def train(model, train_loader, val_loader):
 
         train_loss.append(running_loss / len(train_loader.dataset))
         val_loss.append(val_running_loss / len(val_loader.dataset))
+
+        experiment.log_metric('train_loss', train_loss[-1])
+        experiment.log_metric('val_loss', val_loss[-1])
 
         print('[epoch', epoch + 1, '] Training loss: %.5f' % train_loss[-1], ' Validation loss: %.5f' % val_loss[-1])
         print('         Accuracy: %.2f' % accuracy.compute())
