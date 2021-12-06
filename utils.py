@@ -1,5 +1,6 @@
 import torch
 import matplotlib.pyplot as plt
+import torchvision
 from torch.utils.data import Dataset
 
 def imshow(img):
@@ -41,8 +42,31 @@ class imgDataset(Dataset):
         return self.images[i], self.masks[i]
 
 # Show example: input image, mask and output
-def show_example(model, loader):
+def show_seg(model, loader):
     model.eval()
     img_batch, mask_batch = next(iter(loader))
     output = torch.argmax(model(img_batch), 1)
-    imshow_mult([img_batch[0], mask_batch[0], output[0]], ['Input', 'Label', 'Prediction'])
+    imshow_mult([img_batch[0], mask_batch[0], output[0]], ['Input', 'Ground truth', 'Prediction'])
+
+def visualize_seg(image, seg_pred, seg_true):
+    def t(img):
+        return (img * 127 + 127).to(torch.uint8)
+
+    colors = ['#000000', '#0000FF', '#00FF00', '#00FFFF', '#FF0000', '#FF00FF', '#FFFF00', '#FFFFFF']
+
+    image = t(image)
+
+    seg_true = torchvision.utils.draw_segmentation_masks(
+        image,
+        torch.nn.functional.one_hot(seg_true, num_classes=8).to(torch.bool).movedim(-1, 0),
+        alpha=1.0,
+        colors=colors
+    )
+    seg_pred = torchvision.utils.draw_segmentation_masks(
+        image,
+        torch.nn.functional.one_hot(seg_pred.argmax(0), num_classes=8).to(torch.bool).movedim(-1, 0),
+        alpha=1.0,
+        colors=colors
+    )
+    g = torchvision.utils.make_grid([image, seg_true, seg_pred])
+    return g.moveaxis(0, -1)
