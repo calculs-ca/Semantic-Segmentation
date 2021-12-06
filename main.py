@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torchmetrics import IoU, Accuracy
 from torch.utils.data import DataLoader, random_split
-from utils import imgDataset, show_example
+from utils import imgDataset, show_seg, visualize_seg
 from models import ConvNet, UNet
 from preprocess import preprocess_images
 import matplotlib.pyplot as plt
@@ -118,10 +118,13 @@ def train(model, train_loader, val_loader):
         running_loss = train_epoch(model, train_loader, optimizer, criterion)
         val_running_loss = validation_epoch(model, val_loader, criterion, metrics)
 
-        if epoch % 5 == 0:
-            image, _ = next(iter(val_loader))
-            pred = torch.argmax(model(image), 1)
-            experiment.log_image(pred[0], name='output')
+        if epoch % 10 == 0:
+            image, mask = next(iter(val_loader))
+            output = model(image)
+            mask = torch.squeeze(mask)
+            for i in range(min(10, len(image))):
+                viz = visualize_seg(image[i], output[i], mask[i])
+                experiment.log_image(viz, name='val', step=epoch)
 
         experiment.log_metric('IoU', iou.compute())
         experiment.log_metric('val_accuracy', accuracy.compute())
@@ -152,7 +155,7 @@ def main():
     # Train model
     train(net, train_loader, val_loader)
     # Show prediction example: input, mask, prediction
-    show_example(net, val_loader)
+    show_seg(net, val_loader)
 
 if __name__ == '__main__':
     main()
