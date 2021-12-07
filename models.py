@@ -4,9 +4,10 @@ import torchvision.transforms.functional as TF
 
 # Fully Convolutional model
 class ConvNet(nn.Module):
-    def __init__(self):
+    def __init__(self, features = [16, 32, 64]):
         super(ConvNet, self).__init__()
-        self.features = [8, 16, 32, 64]
+        self.features = features
+        out_channels = 8
         self.encoder = nn.ModuleList()
         self.decoder = nn.ModuleList()
         # maxpool
@@ -15,6 +16,7 @@ class ConvNet(nn.Module):
         self.unpool = nn.ModuleList()
         # batch norm layers
         self.batch_norm = nn.ModuleList()
+        self.relu = nn.ReLU()
 
         in_channels = 3
         for feature in self.features:
@@ -26,18 +28,21 @@ class ConvNet(nn.Module):
         for feature in reversed(self.features):
             self.decoder.append(nn.Conv2d(feature*2, feature, 3, padding=1))
             self.unpool.append(nn.ConvTranspose2d(feature, feature, kernel_size=2, stride=2))
+        self.final = nn.Conv2d(features[0], out_channels, 3, padding=1)
 
     def forward(self, x):
         for i in range(len(self.features)):
             x = self.encoder[i](x)
+            x = self.relu(x)
             x = self.batch_norm[i](x)
             x = self.pool(x)
-
         x = self.bottom(x)
         for i in range(len(self.features)):
             x = self.decoder[i](x)
+            x = self.relu(x)
             x = self.batch_norm[-1-i](x)
             x = self.unpool[i](x)
+        x = self.final(x)
         return x
 
 # Double convolution with batch normalization
@@ -58,11 +63,10 @@ class DoubleConv(nn.Module):
 
 # UNet model
 class UNet(nn.Module):
-    def __init__(self):
+    def __init__(self, features = [16, 32, 64]):
         super(UNet, self).__init__()
         in_channels = 3
         out_channels = 8
-        features = [16, 32, 64]
 
         self.ups = nn.ModuleList()
         self.downs = nn.ModuleList()
