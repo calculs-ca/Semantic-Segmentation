@@ -16,16 +16,18 @@ model = 'conv'
 # Hyperparameters
 params = {
     "model": model,
+    "features": [16, 32, 64],
+    "batch_norm": True,
     "learning_rate": 0.001,
-    "batch_size": 8,
-    "epochs": 10
+    "batch_size": 16,
+    "epochs": 15
 }
 # Create comet experiment
 experiment = Experiment(
     api_key=os.environ['API_KEY'],
     project_name="semantic-segmentation",
     workspace=os.environ['WORKSPACE'],
-    disabled=False
+    disabled=True
 )
 experiment.log_parameters(params)
 
@@ -149,9 +151,9 @@ def main():
     train_loader, val_loader = prepare_data()
     # Initialize model
     if model == 'unet':
-        net = UNet()
+        net = UNet(params["features"])
     else:
-        net = ConvNet()
+        net = ConvNet(params["features"])
     # Train model
     train(net, train_loader, val_loader)
     # Show prediction example: input, mask, prediction
