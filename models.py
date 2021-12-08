@@ -16,7 +16,7 @@ class ConvNet(nn.Module):
         self.unpool = nn.ModuleList()
         # batch norm layers
         self.batch_norm = nn.ModuleList()
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
 
         in_channels = 3
         for feature in self.features:
@@ -33,14 +33,14 @@ class ConvNet(nn.Module):
     def forward(self, x):
         for i in range(len(self.features)):
             x = self.encoder[i](x)
-            x = self.relu(x)
             x = self.batch_norm[i](x)
+            x = self.relu(x)
             x = self.pool(x)
         x = self.bottom(x)
         for i in range(len(self.features)):
             x = self.decoder[i](x)
-            x = self.relu(x)
             x = self.batch_norm[-1-i](x)
+            x = self.relu(x)
             x = self.unpool[i](x)
         x = self.final(x)
         return x
