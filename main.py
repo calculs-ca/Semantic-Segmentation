@@ -8,6 +8,7 @@ from utils import imgDataset, show_seg, visualize_seg
 from models import ConvNet, UNet
 from preprocess import preprocess_images
 import matplotlib.pyplot as plt
+import pytorch_lightning as pl
 """
 Dataset: Underwater imagery (SUIM)
 """
@@ -19,8 +20,8 @@ params = {
     "features": [16, 32, 64],
     "batch_norm": True,
     "learning_rate": 0.001,
-    "batch_size": 16,
-    "epochs": 15
+    "batch_size": 64,
+    "epochs": 10
 }
 # Create comet experiment
 experiment = Experiment(
@@ -30,6 +31,54 @@ experiment = Experiment(
     disabled=True
 )
 experiment.log_parameters(params)
+
+# Lightning module
+class LitModel(pl.LightningModule):
+    def __init__(self, model):
+        self.model = model
+        self.criterion = nn.CrossEntropyLoss()
+
+    def train_step(self, data, target, optimizer):
+        if train_on_gpu:
+            data, target = data.cuda(), target.cuda()
+        target = torch.squeeze(target, dim=1)
+        optimizer.zero_grad()
+
+        output = self.model(data)
+        loss = self.criterion(output, target)
+        loss.backward()
+        optimizer.step()
+        return loss
+
+    def train_epoch(self, train_loader, optimizer):
+        running_loss = 0.
+        for image, mask in train_loader:
+            running_loss += self.train_step(image, mask, optimizer).item()
+        return running_loss
+
+    def validation_step(self, data, target, metrics):
+        if train_on_gpu:
+            data, target = data.cuda(), target.cuda()
+        target = torch.squeeze(target, dim=1)
+
+        output = self.model(data)
+        loss = self.criterion(output, target)
+
+        for metric in metrics:
+            metric(output, target)
+        return loss
+
+    def validation_epoch(self, val_loader, metrics):
+        model.eval()
+
+        val_running_loss = 0.
+        for image, mask in val_loader:
+            val_running_loss += self.validation_step(model, image, mask, metrics).item()
+        return val_running_loss
+    
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(model.parameters(), lr=params["learning_rate"])
+        return optimizer
 
 # Check if cuda is available
 train_on_gpu = torch.cuda.is_available()
@@ -55,47 +104,6 @@ def prepare_data(preprocess=False):
 
     return train_loader, val_loader
 
-def train_step(model, data, target, optimizer, criterion):
-    if train_on_gpu:
-        data, target = data.cuda(), target.cuda()
-    target = torch.squeeze(target, dim=1)
-    optimizer.zero_grad()
-
-    output = model(data)
-    loss = criterion(output, target)
-    loss.backward()
-    optimizer.step()
-
-    return loss.item()
-
-def validation_step(model, data, target, criterion, metrics):
-    if train_on_gpu:
-        data, target = data.cuda(), target.cuda()
-    target = torch.squeeze(target, dim=1)
-
-    output = model(data)
-    loss = criterion(output, target)
-
-    for metric in metrics:
-        metric(output, target)
-
-    return loss.item()
-
-def train_epoch(model, train_loader, optimizer, criterion):
-    model.train()
-
-    running_loss = 0.
-    for image, mask in train_loader:
-        running_loss += train_step(model, image, mask, optimizer, criterion)
-    return running_loss
-
-def validation_epoch(model, val_loader, criterion, metrics):
-    model.eval()
-
-    val_running_loss = 0.
-    for image, mask in val_loader:
-        val_running_loss += validation_step(model, image, mask, criterion, metrics)
-    return val_running_loss
 
 def train(model, train_loader, val_loader):
     # Loss function and optimizer
