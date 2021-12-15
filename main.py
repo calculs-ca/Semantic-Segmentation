@@ -28,7 +28,7 @@ experiment = Experiment(
     api_key=os.environ['API_KEY'],
     project_name="semantic-segmentation",
     workspace=os.environ['WORKSPACE'],
-    disabled=True
+    disabled=False
 )
 experiment.log_parameters(params)
 
@@ -43,12 +43,20 @@ class LitModel(pl.LightningModule):
         accuracy = Accuracy(num_classes=8)
         self.metrics = [iou, accuracy]
 
-    def training_step(self, batch):#TODO: make batch param
+    def training_step(self, batch):
         data, target = batch
         target = torch.squeeze(target, dim=1)
 
         output = self.model(data)
         loss = self.criterion(output, target)
+        experiment.log_metric('train_loss', loss.item())
+
+        if self.current_epoch%10 == 0:
+            target = torch.squeeze(target)
+            for i in range(min(10, len(data))):
+                viz = visualize_seg(data[i], output[i], target[i])
+                experiment.log_image(viz, name='seg_vis', step=self.current_epoch)
+
         return loss
 
     def validation_step(self, batch):
@@ -57,9 +65,12 @@ class LitModel(pl.LightningModule):
 
         output = self.model(data)
         loss = self.criterion(output, target)
+        experiment.log_metric('val_loss', loss.item())
 
         for metric in self.metrics:
             metric(output, target)
+        experiment.log_metric('IoU', self.metrics[0].compute())
+        experiment.log_metric('val_accuracy', self.metrics[1].compute())
         return loss
 
     def configure_optimizers(self):
@@ -113,7 +124,7 @@ def train(model, train_loader, val_loader):
         running_loss = train_epoch(model, train_loader, optimizer, criterion)
         val_running_loss = validation_epoch(model, val_loader, criterion, metrics)
 
-        if epoch % 10 == 0:
+        if epoch % 10 == 0: #TODO: Log images
             image, mask = next(iter(val_loader))
             output = model(image)
             mask = torch.squeeze(mask)
@@ -148,11 +159,11 @@ def main():
     else:
         net = LitModel(ConvNet(params["features"]))
     # Train model
-    trainer = pl.Trainer()
+    trainer = pl.Trainer(max_epochs=params["epochs"])
     trainer.fit(net, train_loader)
     #train(net, train_loader, val_loader)
     # Show prediction example: input, mask, prediction
-    show_seg(net, val_loader)
+    show_seg(net.model, val_loader)
 
 if __name__ == '__main__':
     main()
