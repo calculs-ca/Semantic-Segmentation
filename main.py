@@ -35,49 +35,35 @@ experiment.log_parameters(params)
 # Lightning module
 class LitModel(pl.LightningModule):
     def __init__(self, model):
+        super().__init__()
         self.model = model
         self.criterion = nn.CrossEntropyLoss()
+        # Metrics
+        iou = IoU(num_classes=8)
+        accuracy = Accuracy(num_classes=8)
+        self.metrics = [iou, accuracy]
 
-    def train_step(self, data, target, optimizer):
-        if train_on_gpu:
-            data, target = data.cuda(), target.cuda()
+    def training_step(self, batch):#TODO: make batch param
+        data, target = batch
         target = torch.squeeze(target, dim=1)
-        optimizer.zero_grad()
 
         output = self.model(data)
         loss = self.criterion(output, target)
-        loss.backward()
-        optimizer.step()
         return loss
 
-    def train_epoch(self, train_loader, optimizer):
-        running_loss = 0.
-        for image, mask in train_loader:
-            running_loss += self.train_step(image, mask, optimizer).item()
-        return running_loss
-
-    def validation_step(self, data, target, metrics):
-        if train_on_gpu:
-            data, target = data.cuda(), target.cuda()
+    def validation_step(self, batch):
+        data, target = batch
         target = torch.squeeze(target, dim=1)
 
         output = self.model(data)
         loss = self.criterion(output, target)
 
-        for metric in metrics:
+        for metric in self.metrics:
             metric(output, target)
         return loss
 
-    def validation_epoch(self, val_loader, metrics):
-        model.eval()
-
-        val_running_loss = 0.
-        for image, mask in val_loader:
-            val_running_loss += self.validation_step(model, image, mask, metrics).item()
-        return val_running_loss
-    
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(model.parameters(), lr=params["learning_rate"])
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=params["learning_rate"])
         return optimizer
 
 # Check if cuda is available
@@ -103,7 +89,6 @@ def prepare_data(preprocess=False):
     #test_loader = DataLoader(test_data, batch_size=params["batch_size"], shuffle=False)
 
     return train_loader, val_loader
-
 
 def train(model, train_loader, val_loader):
     # Loss function and optimizer
@@ -159,11 +144,13 @@ def main():
     train_loader, val_loader = prepare_data()
     # Initialize model
     if model == 'unet':
-        net = UNet(params["features"])
+        net = LitModel(UNet(params["features"]))
     else:
-        net = ConvNet(params["features"])
+        net = LitModel(ConvNet(params["features"]))
     # Train model
-    train(net, train_loader, val_loader)
+    trainer = pl.Trainer()
+    trainer.fit(net, train_loader)
+    #train(net, train_loader, val_loader)
     # Show prediction example: input, mask, prediction
     show_seg(net, val_loader)
 
