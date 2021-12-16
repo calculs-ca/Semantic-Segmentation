@@ -21,14 +21,14 @@ params = {
     "batch_norm": True,
     "learning_rate": 0.001,
     "batch_size": 64,
-    "epochs": 10
+    "epochs": 1
 }
 # Create comet experiment
 experiment = Experiment(
     api_key=os.environ['API_KEY'],
     project_name="semantic-segmentation",
     workspace=os.environ['WORKSPACE'],
-    disabled=False
+    disabled=True
 )
 experiment.log_parameters(params)
 
@@ -39,9 +39,9 @@ class LitModel(pl.LightningModule):
         self.model = model
         self.criterion = nn.CrossEntropyLoss()
         # Metrics
-        iou = IoU(num_classes=8)
-        accuracy = Accuracy(num_classes=8)
-        self.metrics = [iou, accuracy]
+        self.iou = IoU(num_classes=8)
+        self.accuracy = Accuracy(num_classes=8)
+        self.log_count = 0
 
     def training_step(self, batch):
         data, target = batch
@@ -52,6 +52,7 @@ class LitModel(pl.LightningModule):
         experiment.log_metric('train_loss', loss.item())
 
         if self.current_epoch%10 == 0:
+            self.log_count += 1
             target = torch.squeeze(target)
             for i in range(min(10, len(data))):
                 viz = visualize_seg(data[i], output[i], target[i])
@@ -67,10 +68,11 @@ class LitModel(pl.LightningModule):
         loss = self.criterion(output, target)
         experiment.log_metric('val_loss', loss.item())
 
-        for metric in self.metrics:
-            metric(output, target)
-        experiment.log_metric('IoU', self.metrics[0].compute())
-        experiment.log_metric('val_accuracy', self.metrics[1].compute())
+        self.iou(output, target)
+        self.accuracy(output, target)
+        experiment.log_metric('IoU', self.iou.compute())
+        experiment.log_metric('val_accuracy', self.accuracy.compute())
+
         return loss
 
     def configure_optimizers(self):
@@ -101,55 +103,6 @@ def prepare_data(preprocess=False):
 
     return train_loader, val_loader
 
-def train(model, train_loader, val_loader):
-    # Loss function and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=params["learning_rate"])
-
-    # Metrics
-    iou = IoU(num_classes=8)
-    accuracy = Accuracy(num_classes=8)
-    metrics = [iou, accuracy]
-
-    # If cuda is available train on gpu
-    if train_on_gpu:
-        print('Training on GPU ...')
-        model.cuda()
-        criterion.cuda()
-        iou.cuda()
-        accuracy.cuda()
-
-    train_loss, val_loss = [], []
-    for epoch in range(params["epochs"]):
-        running_loss = train_epoch(model, train_loader, optimizer, criterion)
-        val_running_loss = validation_epoch(model, val_loader, criterion, metrics)
-
-        if epoch % 10 == 0: #TODO: Log images
-            image, mask = next(iter(val_loader))
-            output = model(image)
-            mask = torch.squeeze(mask)
-            for i in range(min(10, len(image))):
-                viz = visualize_seg(image[i], output[i], mask[i])
-                experiment.log_image(viz, name='val', step=epoch)
-
-        experiment.log_metric('IoU', iou.compute())
-        experiment.log_metric('val_accuracy', accuracy.compute())
-
-        train_loss.append(running_loss / len(train_loader.dataset))
-        val_loss.append(val_running_loss / len(val_loader.dataset))
-
-        experiment.log_metric('train_loss', train_loss[-1])
-        experiment.log_metric('val_loss', val_loss[-1])
-
-        print('[epoch', epoch + 1, '] Training loss: %.5f' % train_loss[-1], ' Validation loss: %.5f' % val_loss[-1])
-        print('         Accuracy: %.2f' % accuracy.compute())
-
-    # Plots
-    epochs_arr = [i + 1 for i in range(params["epochs"])]
-    plt.plot(epochs_arr, train_loss, label='Training loss')
-    plt.plot(epochs_arr, val_loss, label='Validation loss')
-    plt.show()
-
 def main():
     # Prepare data
     train_loader, val_loader = prepare_data()
@@ -164,6 +117,7 @@ def main():
     #train(net, train_loader, val_loader)
     # Show prediction example: input, mask, prediction
     show_seg(net.model, val_loader)
+    print("Log count:", net.log_count)
 
 if __name__ == '__main__':
     main()
