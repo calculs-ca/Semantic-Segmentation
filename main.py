@@ -43,7 +43,7 @@ class LitModel(pl.LightningModule):
         self.accuracy = Accuracy(num_classes=8)
         self.log_count = 0
 
-    def training_step(self, batch):
+    def training_step(self, batch, batch_idx):
         data, target = batch
         target = torch.squeeze(target, dim=1)
 
@@ -51,7 +51,7 @@ class LitModel(pl.LightningModule):
         loss = self.criterion(output, target)
         experiment.log_metric('train_loss', loss.item())
 
-        if self.current_epoch%10 == 0:
+        if self.current_epoch%10 == 0 and batch_idx == 0:
             self.log_count += 1
             target = torch.squeeze(target)
             for i in range(min(10, len(data))):
@@ -114,7 +114,9 @@ def main():
     # Train model
     trainer = pl.Trainer(max_epochs=params["epochs"])
     trainer.fit(net, train_loader)
-    #train(net, train_loader, val_loader)
+    #TODO: validate model
+    trainer.validate(net, val_loader)
+
     # Show prediction example: input, mask, prediction
     show_seg(net.model, val_loader)
     print("Log count:", net.log_count)
