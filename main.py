@@ -21,14 +21,14 @@ params = {
     "batch_norm": True,
     "learning_rate": 0.001,
     "batch_size": 64,
-    "epochs": 1
+    "epochs": 10
 }
 # Create comet experiment
 experiment = Experiment(
     api_key=os.environ['API_KEY'],
     project_name="semantic-segmentation",
     workspace=os.environ['WORKSPACE'],
-    disabled=True
+    disabled=False
 )
 experiment.log_parameters(params)
 
@@ -41,7 +41,6 @@ class LitModel(pl.LightningModule):
         # Metrics
         self.iou = IoU(num_classes=8)
         self.accuracy = Accuracy(num_classes=8)
-        self.log_count = 0
 
     def training_step(self, batch, batch_idx):
         data, target = batch
@@ -52,7 +51,6 @@ class LitModel(pl.LightningModule):
         experiment.log_metric('train_loss', loss.item())
 
         if self.current_epoch%10 == 0 and batch_idx == 0:
-            self.log_count += 1
             target = torch.squeeze(target)
             for i in range(min(10, len(data))):
                 viz = visualize_seg(data[i], output[i], target[i])
@@ -114,12 +112,9 @@ def main():
     # Train model
     trainer = pl.Trainer(max_epochs=params["epochs"])
     trainer.fit(net, train_loader)
-    #TODO: validate model
-    trainer.validate(net, val_loader)
 
     # Show prediction example: input, mask, prediction
     show_seg(net.model, val_loader)
-    print("Log count:", net.log_count)
 
 if __name__ == '__main__':
     main()
