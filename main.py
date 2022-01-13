@@ -36,7 +36,10 @@ experiment.log_parameters(params)
 class LitModel(pl.LightningModule):
     def __init__(self, model):
         super().__init__()
-        self.model = model
+        if model == 'unet':
+            self.model = UNet(params["features"])
+        else:
+            self.model = ConvNet(params["features"])
         self.criterion = nn.CrossEntropyLoss()
         # Metrics
         self.iou = IoU(num_classes=8)
@@ -58,7 +61,7 @@ class LitModel(pl.LightningModule):
 
         return loss
 
-    def validation_step(self, batch):
+    def validation_step(self, batch, batch_idx):
         data, target = batch
         target = torch.squeeze(target, dim=1)
 
@@ -105,13 +108,10 @@ def main():
     # Prepare data
     train_loader, val_loader = prepare_data()
     # Initialize model
-    if model == 'unet':
-        net = LitModel(UNet(params["features"]))
-    else:
-        net = LitModel(ConvNet(params["features"]))
+    net = LitModel(model)
     # Train model
     trainer = pl.Trainer(max_epochs=params["epochs"])
-    trainer.fit(net, train_loader)
+    trainer.fit(net, train_loader, val_loader)
 
     # Show prediction example: input, mask, prediction
     show_seg(net.model, val_loader)
