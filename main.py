@@ -21,7 +21,7 @@ params = {
     "batch_norm": True,
     "learning_rate": 0.001,
     "batch_size": 64,
-    "epochs": 10
+    "epochs": 5
 }
 # Create comet experiment
 experiment = Experiment(
@@ -51,7 +51,9 @@ class LitModel(pl.LightningModule):
 
         output = self.model(data)
         loss = self.criterion(output, target)
-        experiment.log_metric('train_loss', loss.item())
+
+        if batch_idx == 0:
+            experiment.log_metric('train_loss', loss.item(), step=self.current_epoch)
 
         if self.current_epoch%10 == 0 and batch_idx == 0:
             target = torch.squeeze(target)
@@ -67,12 +69,14 @@ class LitModel(pl.LightningModule):
 
         output = self.model(data)
         loss = self.criterion(output, target)
-        experiment.log_metric('val_loss', loss.item())
+        if batch_idx == 0:
+            experiment.log_metric('val_loss', loss.item(), step=self.current_epoch)
 
         self.iou(output, target)
         self.accuracy(output, target)
-        experiment.log_metric('IoU', self.iou.compute())
-        experiment.log_metric('val_accuracy', self.accuracy.compute())
+        if batch_idx == 0:
+            experiment.log_metric('val_IoU', self.iou.compute(), step=self.current_epoch)
+            experiment.log_metric('val_accuracy', self.accuracy.compute(), step=self.current_epoch)
 
         return loss
 
