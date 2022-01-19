@@ -114,7 +114,7 @@ def main():
     # Initialize model
     net = LitModel(model)
     # Train model
-    trainer = pl.Trainer(max_epochs=params["epochs"])
+    trainer = pl.Trainer(max_epochs=params["epochs"], logger=False, enable_checkpointing=False)
     trainer.fit(net, train_loader, val_loader)
 
     # Show prediction example: input, mask, prediction
