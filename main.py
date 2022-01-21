@@ -17,11 +17,11 @@ model = 'conv'
 # Hyperparameters
 params = {
     "model": model,
-    "features": [16, 32, 64],
+    "features": [64, 128, 256],
     "batch_norm": True,
     "learning_rate": 0.001,
     "batch_size": 64,
-    "epochs": 5
+    "epochs": 50
 }
 # Create comet experiment
 experiment = Experiment(
@@ -52,8 +52,13 @@ class LitModel(pl.LightningModule):
         output = self.model(data)
         loss = self.criterion(output, target)
 
+        self.iou(output, target)
+        self.accuracy(output, target)
+        # Log metrics to Comet
         if batch_idx == 0:
             experiment.log_metric('train_loss', loss.item(), step=self.current_epoch)
+            experiment.log_metric('train_IoU', self.iou.compute(), step=self.current_epoch)
+            experiment.log_metric('train_accuracy', self.accuracy.compute(), step=self.current_epoch)
 
         if self.current_epoch%10 == 0 and batch_idx == 0:
             target = torch.squeeze(target)
@@ -69,12 +74,12 @@ class LitModel(pl.LightningModule):
 
         output = self.model(data)
         loss = self.criterion(output, target)
-        if batch_idx == 0:
-            experiment.log_metric('val_loss', loss.item(), step=self.current_epoch)
 
         self.iou(output, target)
         self.accuracy(output, target)
+        # Log metrics to Comet
         if batch_idx == 0:
+            experiment.log_metric('val_loss', loss.item(), step=self.current_epoch)
             experiment.log_metric('val_IoU', self.iou.compute(), step=self.current_epoch)
             experiment.log_metric('val_accuracy', self.accuracy.compute(), step=self.current_epoch)
 
