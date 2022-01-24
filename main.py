@@ -19,7 +19,7 @@ params = {
     "model": model,
     "features": [64, 128, 256],
     "batch_norm": True,
-    "learning_rate": 0.001,
+    "learning_rate": 1.10e-4,
     "batch_size": 64,
     "epochs": 50
 }
@@ -34,12 +34,13 @@ experiment.log_parameters(params)
 
 # Lightning module
 class LitModel(pl.LightningModule):
-    def __init__(self, model):
+    def __init__(self, model, lr):
         super().__init__()
         if model == 'unet':
             self.model = UNet(params["features"])
         else:
             self.model = ConvNet(params["features"])
+        self.lr = lr
         self.criterion = nn.CrossEntropyLoss()
         # Metrics
         self.iou = IoU(num_classes=8)
@@ -117,13 +118,20 @@ def main():
     # Prepare data
     train_loader, val_loader = prepare_data()
     # Initialize model
-    net = LitModel(model)
+    litmodel = LitModel(model, params["learning_rate"])
     # Train model
     trainer = pl.Trainer(max_epochs=params["epochs"], logger=False, enable_checkpointing=False)
-    trainer.fit(net, train_loader, val_loader)
+    find_lr = False
+    if find_lr:
+        lr_finder = trainer.tuner.lr_find(litmodel, train_loader, val_loader)
+        fig = lr_finder.plot(suggest=True)
+        plt.figure(fig)
+        plt.show()
+        print("learning rate suggestion:", lr_finder.suggestion())
+    trainer.fit(litmodel, train_loader, val_loader)
 
     # Show prediction example: input, mask, prediction
-    show_seg(net.model, val_loader)
+    #show_seg(litmodel.model, val_loader)
 
 if __name__ == '__main__':
     main()
