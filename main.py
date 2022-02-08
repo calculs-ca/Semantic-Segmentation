@@ -21,13 +21,13 @@ params = {
     "batch_norm": True,
     "learning_rate": 1.10e-4,
     "batch_size": 64,
-    "epochs": 50
+    "epochs": 200
 }
 # Create comet experiment
 experiment = Experiment(
     api_key=os.environ['API_KEY'],
     project_name="semantic-segmentation",
-    workspace=os.environ['WORKSPACE'],
+    workspace="aklopezcarbajal",
     disabled=False
 )
 experiment.log_parameters(params)
@@ -43,8 +43,10 @@ class LitModel(pl.LightningModule):
         self.lr = lr
         self.criterion = nn.CrossEntropyLoss()
         # Metrics
-        self.iou = IoU(num_classes=8)
-        self.accuracy = Accuracy(num_classes=8)
+        self.accu_train = Accuracy(num_classes=8)
+        self.accu_val = Accuracy(num_classes=8)
+        self.iou_train = IoU(num_classes=8)
+        self.iou_val = IoU(num_classes=8)
 
     def training_step(self, batch, batch_idx):
         data, target = batch
@@ -53,13 +55,13 @@ class LitModel(pl.LightningModule):
         output = self.model(data)
         loss = self.criterion(output, target)
 
-        self.iou(output, target)
-        self.accuracy(output, target)
+        self.iou_train(output, target)
+        self.accu_train(output, target)
         # Log metrics to Comet
         if batch_idx == 0:
             experiment.log_metric('train_loss', loss.item(), step=self.current_epoch)
-            experiment.log_metric('train_IoU', self.iou.compute(), step=self.current_epoch)
-            experiment.log_metric('train_accuracy', self.accuracy.compute(), step=self.current_epoch)
+            experiment.log_metric('train_IoU', self.iou_train.compute(), step=self.current_epoch)
+            experiment.log_metric('train_accuracy', self.accu_train.compute(), step=self.current_epoch)
 
         if self.current_epoch%10 == 0 and batch_idx == 0:
             target = torch.squeeze(target)
@@ -76,13 +78,13 @@ class LitModel(pl.LightningModule):
         output = self.model(data)
         loss = self.criterion(output, target)
 
-        self.iou(output, target)
-        self.accuracy(output, target)
+        self.iou_val(output, target)
+        self.accu_val(output, target)
         # Log metrics to Comet
         if batch_idx == 0:
             experiment.log_metric('val_loss', loss.item(), step=self.current_epoch)
-            experiment.log_metric('val_IoU', self.iou.compute(), step=self.current_epoch)
-            experiment.log_metric('val_accuracy', self.accuracy.compute(), step=self.current_epoch)
+            experiment.log_metric('val_IoU', self.iou_val.compute(), step=self.current_epoch)
+            experiment.log_metric('val_accuracy', self.accu_val.compute(), step=self.current_epoch)
 
         return loss
 
@@ -97,7 +99,7 @@ print('Is cuda available?', 'Yes' if train_on_gpu else 'No')
 def prepare_data(preprocess=False):
     if preprocess:
         preprocess_images(os.environ['PATH'])
-    prep_data = torch.load('preprocessed_128.pt')
+    prep_data = torch.load('./preprocessed_128.pt')
     trainval_imgs, trainval_masks = prep_data['images'], prep_data['masks']
 
     # Make dataset and apply transforms
@@ -120,6 +122,7 @@ def main():
     # Initialize model
     litmodel = LitModel(model, params["learning_rate"])
     # Train model
+    #trainer = pl.Trainer(fast_dev_run=True)
     trainer = pl.Trainer(max_epochs=params["epochs"], logger=False, enable_checkpointing=False)
     find_lr = False
     if find_lr:
