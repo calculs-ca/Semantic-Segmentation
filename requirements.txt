@@ -1,6 +1,9 @@
 torch~=1.9.1
 matplotlib~=3.4.3
 numpy~=1.21.2
-torchvision~=0.10.1
+torchvision
 Pillow~=7.0.0
 natsort~=7.1.1
+torchmetrics~=0.6.0
+pytorch-lightning~=1.5.5
+comet-ml
