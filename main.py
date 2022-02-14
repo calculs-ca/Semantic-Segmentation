@@ -54,24 +54,34 @@ class LitModel(pl.LightningModule):
 
         output = self.model(data)
         loss = self.criterion(output, target)
-
         self.iou_train(output, target)
         self.accu_train(output, target)
-        # Log metrics to Comet
-        if batch_idx == 0:
-            experiment.log_metric('train_loss', loss.item(), step=self.current_epoch)
-            experiment.log_metric('train_IoU', self.iou_train.compute(), step=self.current_epoch)
-            experiment.log_metric('train_accuracy', self.accu_train.compute(), step=self.current_epoch)
-            self.iou_train.reset()
-            self.accu_train.reset()
+        # Elements for visualization
+        viz = [data, output, target]
 
-        if self.current_epoch%10 == 0 and batch_idx == 0:
+        return {"loss": loss, "IoU": self.iou_train.compute(), "accuracy": self.accu_train.compute(), "viz": viz}
+
+    def training_epoch_end(self, training_step_outputs):
+        # Compute average
+        num_outputs = len(training_step_outputs)
+        loss = sum([out['loss'].item() for out in training_step_outputs])/num_outputs
+        IoU = sum([out['IoU'] for out in training_step_outputs])/num_outputs
+        accuracy = sum([out['accuracy'] for out in training_step_outputs])/num_outputs
+        # Log metrics average to Comet
+        experiment.log_metric('train_loss', loss, step=self.current_epoch)
+        experiment.log_metric('train_IoU', IoU, step=self.current_epoch)
+        experiment.log_metric('train_accuracy', accuracy, step=self.current_epoch)
+        # Reset metrics
+        self.iou_train.reset()
+        self.accu_train.reset()
+        # Log segmentation visualization
+        if self.current_epoch%10 == 0:
+            visualize = training_step_outputs[-1]["viz"]
+            data, output, target = visualize
             target = torch.squeeze(target)
             for i in range(min(10, len(data))):
                 viz = visualize_seg(data[i], output[i], target[i])
                 experiment.log_image(viz, name='seg_vis', step=self.current_epoch)
-
-        return loss
 
     def validation_step(self, batch, batch_idx):
         data, target = batch
@@ -79,18 +89,24 @@ class LitModel(pl.LightningModule):
 
         output = self.model(data)
         loss = self.criterion(output, target)
-
         self.iou_val(output, target)
         self.accu_val(output, target)
-        # Log metrics to Comet
-        if batch_idx == 0:
-            experiment.log_metric('val_loss', loss.item(), step=self.current_epoch)
-            experiment.log_metric('val_IoU', self.iou_val.compute(), step=self.current_epoch)
-            experiment.log_metric('val_accuracy', self.accu_val.compute(), step=self.current_epoch)
-            self.iou_val.reset()
-            self.accu_val.reset()
 
-        return loss
+        return {"loss": loss, "IoU": self.iou_val.compute(), "accuracy": self.accu_val.compute()}
+
+    def validation_epoch_end(self, validation_step_outputs):
+        # Compute average
+        num_outputs = len(validation_step_outputs)
+        loss = sum([out['loss'].item() for out in validation_step_outputs])/num_outputs
+        IoU = sum([out['IoU'] for out in validation_step_outputs])/num_outputs
+        accuracy = sum([out['accuracy'] for out in validation_step_outputs])/num_outputs
+        # Log metrics average to Comet
+        experiment.log_metric('val_loss', loss, step=self.current_epoch)
+        experiment.log_metric('val_IoU', IoU, step=self.current_epoch)
+        experiment.log_metric('val_accuracy', accuracy, step=self.current_epoch)
+        # Reset metrics
+        self.iou_train.reset()
+        self.accu_train.reset()
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=params["learning_rate"])
