@@ -4,11 +4,13 @@ import torch
 import torch.nn as nn
 from torchmetrics import IoU, Accuracy
 from torch.utils.data import DataLoader, random_split
+import numpy as np
+import pytorch_lightning as pl
+import optuna
+from optuna.integration import PyTorchLightningPruningCallback
 from utils import imgDataset, show_seg, visualize_seg
 from models import ConvNet, UNet
 from preprocess import preprocess_images
-import matplotlib.pyplot as plt
-import pytorch_lightning as pl
 """
 Dataset: Underwater imagery (SUIM)
 """
@@ -28,7 +30,7 @@ experiment = Experiment(
     api_key=os.environ['API_KEY'],
     project_name="semantic-segmentation",
     workspace="aklopezcarbajal",
-    disabled=False
+    disabled=True
 )
 experiment.log_parameters(params)
 
@@ -59,18 +61,15 @@ class LitModel(pl.LightningModule):
         # Elements for visualization
         viz = [data, output, target]
 
-        return {"loss": loss, "IoU": self.iou_train.compute(), "accuracy": self.accu_train.compute(), "viz": viz}
+        return {"loss": loss, "viz": viz}
 
     def training_epoch_end(self, training_step_outputs):
         # Compute average
-        num_outputs = len(training_step_outputs)
-        loss = sum([out['loss'].item() for out in training_step_outputs])/num_outputs
-        IoU = sum([out['IoU'] for out in training_step_outputs])/num_outputs
-        accuracy = sum([out['accuracy'] for out in training_step_outputs])/num_outputs
-        # Log metrics average to Comet
+        loss = np.mean([out['loss'].item() for out in training_step_outputs])
+        # Log metrics to Comet
         experiment.log_metric('train_loss', loss, step=self.current_epoch)
-        experiment.log_metric('train_IoU', IoU, step=self.current_epoch)
-        experiment.log_metric('train_accuracy', accuracy, step=self.current_epoch)
+        experiment.log_metric('train_IoU', self.iou_train.compute(), step=self.current_epoch)
+        experiment.log_metric('train_accuracy', self.accu_train.compute(), step=self.current_epoch)
         # Reset metrics
         self.iou_train.reset()
         self.accu_train.reset()
@@ -91,25 +90,32 @@ class LitModel(pl.LightningModule):
         loss = self.criterion(output, target)
         self.iou_val(output, target)
         self.accu_val(output, target)
+        # Elements for visualization
+        viz = [data, output, target]
 
-        return {"loss": loss, "IoU": self.iou_val.compute(), "accuracy": self.accu_val.compute()}
+        return {"loss": loss, "viz": viz}
 
     def validation_epoch_end(self, validation_step_outputs):
         # Compute average
-        num_outputs = len(validation_step_outputs)
-        loss = sum([out['loss'].item() for out in validation_step_outputs])/num_outputs
-        IoU = sum([out['IoU'] for out in validation_step_outputs])/num_outputs
-        accuracy = sum([out['accuracy'] for out in validation_step_outputs])/num_outputs
+        loss = np.mean([out['loss'].item() for out in validation_step_outputs])
         # Log metrics average to Comet
         experiment.log_metric('val_loss', loss, step=self.current_epoch)
-        experiment.log_metric('val_IoU', IoU, step=self.current_epoch)
-        experiment.log_metric('val_accuracy', accuracy, step=self.current_epoch)
+        experiment.log_metric('val_IoU', self.iou_val.compute(), step=self.current_epoch)
+        experiment.log_metric('val_accuracy', self.accu_val.compute(), step=self.current_epoch)
         # Reset metrics
-        self.iou_train.reset()
-        self.accu_train.reset()
+        self.iou_val.reset()
+        self.accu_val.reset()
+        # Log segmentation visualization
+        if self.current_epoch%10 == 0:
+            visualize = validation_step_outputs[-1]["viz"]
+            data, output, target = visualize
+            target = torch.squeeze(target)
+            for i in range(min(10, len(data))):
+                viz = visualize_seg(data[i], output[i], target[i])
+                experiment.log_image(viz, name='val_seg_vis', step=self.current_epoch)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=params["learning_rate"])
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         return optimizer
 
 # Check if cuda is available
@@ -144,17 +150,10 @@ def main():
     # Train model
     #trainer = pl.Trainer(fast_dev_run=True)
     trainer = pl.Trainer(max_epochs=params["epochs"], logger=False, enable_checkpointing=False)
-    find_lr = False
-    if find_lr:
-        lr_finder = trainer.tuner.lr_find(litmodel, train_loader, val_loader)
-        fig = lr_finder.plot(suggest=True)
-        plt.figure(fig)
-        plt.show()
-        print("learning rate suggestion:", lr_finder.suggestion())
+
     trainer.fit(litmodel, train_loader, val_loader)
 
-    # Show prediction example: input, mask, prediction
-    #show_seg(litmodel.model, val_loader)
+
 
 if __name__ == '__main__':
     main()
