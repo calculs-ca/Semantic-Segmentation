@@ -1,3 +1,4 @@
 *.pyc
 .idea/
 *.sh
+lightning_logs/
