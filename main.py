@@ -7,42 +7,34 @@ from torch.utils.data import DataLoader, random_split
 import numpy as np
 import pytorch_lightning as pl
 import optuna
-from optuna.integration import PyTorchLightningPruningCallback
 from utils import imgDataset, show_seg, visualize_seg
 from models import ConvNet, UNet
 from preprocess import preprocess_images
 """
 Dataset: Underwater imagery (SUIM)
 """
-# Select model: 'unet', 'conv'
-model = 'conv'
-# Hyperparameters
-params = {
-    "model": model,
+# Select model: 'unet', 'convnet'
+model_arch = 'convnet'
+# Default hyperparameters
+def_params = {
+    "model": model_arch,
     "features": [64, 128, 256],
     "batch_norm": True,
     "learning_rate": 1.10e-4,
     "batch_size": 64,
-    "epochs": 50
+    "epochs": 3
 }
-# Create comet experiment
-experiment = Experiment(
-    api_key=os.environ['API_KEY'],
-    project_name="semantic-segmentation",
-    workspace="aklopezcarbajal",
-    disabled=True
-)
-experiment.log_parameters(params)
 
 # Lightning module
 class LitModel(pl.LightningModule):
-    def __init__(self, model, lr):
+    def __init__(self, model_arch, params, experiment):
         super().__init__()
-        if model == 'unet':
+        if model_arch == 'unet':
             self.model = UNet(params["features"])
         else:
             self.model = ConvNet(params["features"])
-        self.lr = lr
+        self.experiment = experiment
+        self.lr = params['learning_rate']
         self.criterion = nn.CrossEntropyLoss()
         # Metrics
         self.accu_train = Accuracy(num_classes=8)
@@ -67,9 +59,9 @@ class LitModel(pl.LightningModule):
         # Compute average
         loss = np.mean([out['loss'].item() for out in training_step_outputs])
         # Log metrics to Comet
-        experiment.log_metric('train_loss', loss, step=self.current_epoch)
-        experiment.log_metric('train_IoU', self.iou_train.compute(), step=self.current_epoch)
-        experiment.log_metric('train_accuracy', self.accu_train.compute(), step=self.current_epoch)
+        self.experiment.log_metric('train_loss', loss, step=self.current_epoch)
+        self.experiment.log_metric('train_IoU', self.iou_train.compute(), step=self.current_epoch)
+        self.experiment.log_metric('train_accuracy', self.accu_train.compute(), step=self.current_epoch)
         # Reset metrics
         self.iou_train.reset()
         self.accu_train.reset()
@@ -80,7 +72,7 @@ class LitModel(pl.LightningModule):
             target = torch.squeeze(target)
             for i in range(min(10, len(data))):
                 viz = visualize_seg(data[i], output[i], target[i])
-                experiment.log_image(viz, name='seg_vis', step=self.current_epoch)
+                self.experiment.log_image(viz, name='seg_vis', step=self.current_epoch)
 
     def validation_step(self, batch, batch_idx):
         data, target = batch
@@ -99,9 +91,10 @@ class LitModel(pl.LightningModule):
         # Compute average
         loss = np.mean([out['loss'].item() for out in validation_step_outputs])
         # Log metrics average to Comet
-        experiment.log_metric('val_loss', loss, step=self.current_epoch)
-        experiment.log_metric('val_IoU', self.iou_val.compute(), step=self.current_epoch)
-        experiment.log_metric('val_accuracy', self.accu_val.compute(), step=self.current_epoch)
+        self.experiment.log_metric('val_loss', loss, step=self.current_epoch)
+        self.experiment.log_metric('val_IoU', self.iou_val.compute(), step=self.current_epoch)
+        self.experiment.log_metric('val_accuracy', self.accu_val.compute(), step=self.current_epoch)
+        self.log('val_iou', self.iou_val.compute())
         # Reset metrics
         self.iou_val.reset()
         self.accu_val.reset()
@@ -112,7 +105,7 @@ class LitModel(pl.LightningModule):
             target = torch.squeeze(target)
             for i in range(min(10, len(data))):
                 viz = visualize_seg(data[i], output[i], target[i])
-                experiment.log_image(viz, name='val_seg_vis', step=self.current_epoch)
+                self.experiment.log_image(viz, name='val_seg_vis', step=self.current_epoch)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
@@ -127,33 +120,79 @@ def prepare_data(preprocess=False):
         preprocess_images(os.environ['PATH'])
     prep_data = torch.load('./preprocessed_128.pt')
     trainval_imgs, trainval_masks = prep_data['images'], prep_data['masks']
-
     # Make dataset and apply transforms
     trainval_data = imgDataset(trainval_imgs, trainval_masks)
     train_size = int(0.8 * len(trainval_data))
     val_size = len(trainval_data) - train_size
     train_data, val_data = random_split(trainval_data, [train_size, val_size])
-    #test_data = imgDataset(test_imgs, test_masks)
+
+    return train_data, val_data
+
+def train(params, train_data, val_data):
+    # Create comet experiment
+    experiment = Experiment(
+        api_key=os.environ['API_KEY'],
+        project_name="semantic-segmentation",
+        workspace="aklopezcarbajal",
+        disabled=True
+    )
+    # Log parameters
+    experiment.log_parameters(params)
+    exp_name = experiment.get_name()    # log name in optuna trials
 
     # Data loaders
     train_loader = DataLoader(train_data, batch_size=params["batch_size"], shuffle=True)
     val_loader = DataLoader(val_data, batch_size=params["batch_size"], shuffle=True)
-    #test_loader = DataLoader(test_data, batch_size=params["batch_size"], shuffle=False)
-
-    return train_loader, val_loader
-
-def main():
-    # Prepare data
-    train_loader, val_loader = prepare_data()
     # Initialize model
-    litmodel = LitModel(model, params["learning_rate"])
+    litmodel = LitModel(model_arch, params, experiment)
+
     # Train model
-    #trainer = pl.Trainer(fast_dev_run=True)
-    trainer = pl.Trainer(max_epochs=params["epochs"], logger=False, enable_checkpointing=False)
+    early_stopping = pl.callbacks.EarlyStopping('val_iou')
+    trainer = pl.Trainer(logger=True, checkpoint_callback=False, max_epochs=params['epochs'], callbacks=[early_stopping])
+    #trainer = pl.Trainer(fast_dev_run=True)    # fast run
 
     trainer.fit(litmodel, train_loader, val_loader)
+    score = trainer.callback_metrics['val_iou']
+    print("[INFO] Finish training   score:", score)
 
+    experiment.end()
+    return score
 
+def objective(trial: optuna.trial.Trial, train_data, val_data):
+    params = def_params.copy()
+    # Suggest hyperparams
+    width = trial.suggest_categorical('width', [32, 64, 96])
+    features = [width, 2*width, 4*width]
+    params.update({
+            'optuna_study': trial.study.study_name,
+            'optuna_trial': trial.number,
+            'features': features,
+            'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5, 1000),
+            'batch_size': trial.suggest_categorical('batch_size', [16, 32, 64])
+    })
+    trial_val = train(params, train_data, val_data)
+    return trial_val
+
+def main():
+    train_data, val_data = prepare_data()   # Prepare data
+
+    hp_optim = True
+    if hp_optim:
+        study = optuna.create_study(direction='maximize')
+        study.optimize(lambda trial: objective(trial, train_data, val_data), n_trials=3, timeout=600)
+
+        print("Number of finished trials: {}".format(len(study.trials)))
+
+        print("Best trial:")
+        trial = study.best_trial
+
+        print("  Value: {}".format(trial.value))
+
+        print("  Params: ")
+        for key, value in trial.params.items():
+            print("    {}: {}".format(key, value))
+    else:
+        train(def_params, train_data, val_data)
 
 if __name__ == '__main__':
     main()
