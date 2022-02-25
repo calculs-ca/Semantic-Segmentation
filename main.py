@@ -69,9 +69,9 @@ class LitModel(pl.LightningModule):
         if self.current_epoch%10 == 0:
             visualize = training_step_outputs[-1]["viz"]
             data, output, target = visualize
-            target = torch.squeeze(target)
+            target_ = torch.squeeze(torch.clone(target), dim=1)
             for i in range(min(10, len(data))):
-                viz = visualize_seg(data[i], output[i], target[i])
+                viz = visualize_seg(data[i], output[i], target_[i])
                 self.experiment.log_image(viz, name='seg_vis', step=self.current_epoch)
 
     def validation_step(self, batch, batch_idx):
@@ -102,9 +102,9 @@ class LitModel(pl.LightningModule):
         if self.current_epoch%10 == 0:
             visualize = validation_step_outputs[-1]["viz"]
             data, output, target = visualize
-            target = torch.squeeze(target)
+            target_ = torch.squeeze(torch.clone(target), dim=1)
             for i in range(min(10, len(data))):
-                viz = visualize_seg(data[i], output[i], target[i])
+                viz = visualize_seg(data[i], output[i], target_[i])
                 self.experiment.log_image(viz, name='val_seg_vis', step=self.current_epoch)
 
     def configure_optimizers(self):
@@ -138,7 +138,6 @@ def train(params, train_data, val_data):
     )
     # Log parameters
     experiment.log_parameters(params)
-    exp_name = experiment.get_name()    # log name in optuna trials
 
     # Data loaders
     train_loader = DataLoader(train_data, batch_size=params["batch_size"], shuffle=True)
@@ -152,11 +151,10 @@ def train(params, train_data, val_data):
     #trainer = pl.Trainer(fast_dev_run=True)    # fast run
 
     trainer.fit(litmodel, train_loader, val_loader)
-    score = trainer.callback_metrics['val_iou']
-    print("[INFO] Finish training   score:", score)
+    val = trainer.callback_metrics['val_iou']
 
     experiment.end()
-    return score
+    return val
 
 def objective(trial: optuna.trial.Trial, train_data, val_data):
     params = def_params.copy()
@@ -181,16 +179,13 @@ def main():
         study = optuna.create_study(direction='maximize')
         study.optimize(lambda trial: objective(trial, train_data, val_data), n_trials=3, timeout=600)
 
-        print("Number of finished trials: {}".format(len(study.trials)))
-
+        print("Number of finished trials: ", len(study.trials))
         print("Best trial:")
         trial = study.best_trial
-
-        print("  Value: {}".format(trial.value))
-
+        print("  Value: ", trial.value)
         print("  Params: ")
         for key, value in trial.params.items():
-            print("    {}: {}".format(key, value))
+            print("     ", key, ":", value)
     else:
         train(def_params, train_data, val_data)
 
