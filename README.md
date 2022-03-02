@@ -1,18 +1,26 @@
-# Semantic-Segmentation
-Multi-class Image Semantic Segmentation
+# Image Semantic-Segmentation
+Multi-class Image Semantic Segmentation on underwater dataset.
+There are two implemented models: a simple convolutional model and a Unet.
+The training uses *Pytorch Lightning* and the hyperparameter optimization is done with *Optuna*.
+The metrcis, code and visualization are logged to Comet.ml during training. Check [comet.ml | semantic-segmentation](https://www.comet.ml/aklopezcarbajal/semantic-segmentation/view/XTQcsRTTflYLoZIqMLn7mpZc6/panels).
 
-# Dataset
+## Dataset
 [Semantic Segmentation of Underwater Imagery SUIM](https://www.kaggle.com/ashish2001/semantic-segmentation-of-underwater-imagery-suim)
 
 This dataset contains over 1500 images with pixel annotations for eight object categories: fish (vertebrates), reefs
 (invertebrates), aquatic plants, wrecks/ruins, human divers, robots, and sea-floor.
 
---- insert image sample ---
+## Setup
+* Create virtual environment
+* Install requirements
+```
+pip istall -r requirements.txt 
+```
+* Activate environment
 
-# Models
-We implemented two models, a simple Fully convolutional model and a Unet. 
-
-<p float='left'>
-  <img src="https://miro.medium.com/max/1016/1*NXNGhfSyzQcKzoOSt-Z0Ng.png" alt="fuly-conv" width="250" height="150"/>
-  <img src="https://www.researchgate.net/profile/Matheus-Ferreira-4/publication/331549658/figure/fig3/AS:733459370745861@1551881749851/U-net-architecture-for-the-forest-types-segmentation-adapted-from-Ronneberger-et-al.png" alt="unet" width="250" height="150"/>
-</p>
+## Pre-process data
+The transformed data is stored in a ```.pt``` file. To generate said file run the code once passing the flag ```preprocess=True``` to ```prepare_data()```. 
+Make sure you set the environment variable ```DATA_PATH``` with the directory of the dataset.
+```
+export DATA_PATH=/path/to/data
+```
