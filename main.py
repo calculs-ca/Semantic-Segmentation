@@ -22,7 +22,7 @@ def_params = {
     "batch_norm": True,
     "learning_rate": 1.10e-4,
     "batch_size": 64,
-    "epochs": 3
+    "epochs": 100
 }
 
 # Lightning module
@@ -69,9 +69,8 @@ class LitModel(pl.LightningModule):
         if self.current_epoch%10 == 0:
             visualize = training_step_outputs[-1]["viz"]
             data, output, target = visualize
-            target_ = torch.squeeze(torch.clone(target), dim=1)
             for i in range(min(10, len(data))):
-                viz = visualize_seg(data[i], output[i], target_[i])
+                viz = visualize_seg(data[i], output[i], target[i])
                 self.experiment.log_image(viz, name='seg_vis', step=self.current_epoch)
 
     def validation_step(self, batch, batch_idx):
@@ -102,9 +101,8 @@ class LitModel(pl.LightningModule):
         if self.current_epoch%10 == 0:
             visualize = validation_step_outputs[-1]["viz"]
             data, output, target = visualize
-            target_ = torch.squeeze(torch.clone(target), dim=1)
             for i in range(min(10, len(data))):
-                viz = visualize_seg(data[i], output[i], target_[i])
+                viz = visualize_seg(data[i], output[i], target[i])
                 self.experiment.log_image(viz, name='val_seg_vis', step=self.current_epoch)
 
     def configure_optimizers(self):
@@ -117,9 +115,11 @@ print('Is cuda available?', 'Yes' if train_on_gpu else 'No')
 
 def prepare_data(preprocess=False):
     if preprocess:
-        preprocess_images(os.environ['PATH'])
+        preprocess_images(os.environ['DATA_PATH'])
     prep_data = torch.load('./preprocessed_128.pt')
-    trainval_imgs, trainval_masks = prep_data['images'], prep_data['masks']
+    trainval_imgs, trainval_masks_ = prep_data['images'], prep_data['masks']
+    trainval_masks = [np.squeeze(m) for m in prep_data['masks']]
+
     # Make dataset and apply transforms
     trainval_data = imgDataset(trainval_imgs, trainval_masks)
     train_size = int(0.8 * len(trainval_data))
@@ -141,18 +141,20 @@ def train(params, train_data, val_data):
 
     # Data loaders
     train_loader = DataLoader(train_data, batch_size=params["batch_size"], shuffle=True)
-    val_loader = DataLoader(val_data, batch_size=params["batch_size"], shuffle=True)
+    val_loader = DataLoader(val_data, batch_size=params["batch_size"], shuffle=False)
     # Initialize model
     litmodel = LitModel(model_arch, params, experiment)
 
     # Train model
     early_stopping = pl.callbacks.EarlyStopping('val_iou')
     trainer = pl.Trainer(logger=True, checkpoint_callback=False, max_epochs=params['epochs'], callbacks=[early_stopping])
-    #trainer = pl.Trainer(fast_dev_run=True)    # fast run
+    #trainer = pl.Trainer(fast_dev_run=True)    # Fast run
 
     trainer.fit(litmodel, train_loader, val_loader)
     val = trainer.callback_metrics['val_iou']
 
+    # Show segmentation example: input, prediction, true segmentation
+    #show_seg(litmodel.model, val_loader)
     experiment.end()
     return val
 
@@ -174,7 +176,7 @@ def objective(trial: optuna.trial.Trial, train_data, val_data):
 def main():
     train_data, val_data = prepare_data()   # Prepare data
 
-    hp_optim = True
+    hp_optim = False
     if hp_optim:
         study = optuna.create_study(direction='maximize')
         study.optimize(lambda trial: objective(trial, train_data, val_data), n_trials=3, timeout=600)
