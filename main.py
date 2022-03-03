@@ -44,8 +44,6 @@ class LitModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         data, target = batch
-        target = torch.squeeze(target, dim=1)
-
         output = self.model(data)
         loss = self.criterion(output, target)
         self.iou_train(output, target)
@@ -75,8 +73,6 @@ class LitModel(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         data, target = batch
-        target = torch.squeeze(target, dim=1)
-
         output = self.model(data)
         loss = self.criterion(output, target)
         self.iou_val(output, target)
