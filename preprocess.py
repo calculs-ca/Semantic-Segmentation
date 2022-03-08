@@ -36,11 +36,11 @@ def label_mask(mask):
     return mask
 
 def preprocess_images(path):
-    trainval_imgs = load_images(path+'/train/images')
-    trainval_masks = load_images(path+'/train/masks')
+    trainval_imgs = load_images(path+'/train_val/images')
+    trainval_masks = load_images(path+'/train_val/masks')
     """
-    test_imgs = load_images(folder_path+'/test/images')
-    test_masks = load_images(folder_path+'/test/masks')
+    test_imgs = load_images(folder_path+'/TEST/images')
+    test_masks = load_images(folder_path+'/TEST/masks')
     """
     images = [imgTransform(img) for img in trainval_imgs]
     masks = [maskTransform(label_mask(mask)) for mask in trainval_masks]
