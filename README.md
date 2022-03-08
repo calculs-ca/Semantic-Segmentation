@@ -2,7 +2,7 @@
 Multi-class Image Semantic Segmentation on underwater dataset.
 There are two implemented models: a simple convolutional model and a Unet.
 The training uses *Pytorch Lightning* and the hyperparameter optimization is done with *Optuna*.
-The metrcis, code and visualization are logged to Comet.ml during training. Check [comet.ml | semantic-segmentation](https://www.comet.ml/aklopezcarbajal/semantic-segmentation/view/XTQcsRTTflYLoZIqMLn7mpZc6/panels).
+The metrics, code and visualization are logged to Comet.ml during training. Check [comet.ml | semantic-segmentation](https://www.comet.ml/aklopezcarbajal/semantic-segmentation/view/XTQcsRTTflYLoZIqMLn7mpZc6/panels).
 
 ## Dataset
 [Semantic Segmentation of Underwater Imagery SUIM](https://www.kaggle.com/ashish2001/semantic-segmentation-of-underwater-imagery-suim)
@@ -14,7 +14,7 @@ This dataset contains over 1500 images with pixel annotations for eight object c
 * Create virtual environment
 * Install requirements
 ```
-pip istall -r requirements.txt 
+pip install -r requirements.txt 
 ```
 * Activate environment
 
