@@ -142,13 +142,13 @@ def train(params, train_data, val_data):
     litmodel = LitModel(model_arch, params, experiment)
 
     # Train model
-    early_stopping = pl.callbacks.EarlyStopping('val_iou')
+    early_stopping = pl.callbacks.EarlyStopping(monitor="val_iou", patience=10, mode="max")
     trainer = pl.Trainer(logger=True, checkpoint_callback=False, max_epochs=params['epochs'], callbacks=[early_stopping])
     #trainer = pl.Trainer(fast_dev_run=True)    # Fast run
 
     trainer.fit(litmodel, train_loader, val_loader)
     val = trainer.callback_metrics['val_iou']
-
+    
     # Show segmentation example: input, prediction, true segmentation
     #show_seg(litmodel.model, val_loader)
     experiment.end()
@@ -163,7 +163,7 @@ def objective(trial: optuna.trial.Trial, train_data, val_data):
             'optuna_study': trial.study.study_name,
             'optuna_trial': trial.number,
             'features': features,
-            'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5, 1000),
+            'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5, 1e-1),
             'batch_size': trial.suggest_categorical('batch_size', [16, 32, 64])
     })
     trial_val = train(params, train_data, val_data)
@@ -172,10 +172,10 @@ def objective(trial: optuna.trial.Trial, train_data, val_data):
 def main():
     train_data, val_data = prepare_data()   # Prepare data
 
-    hp_optim = False
+    hp_optim = True
     if hp_optim:
         study = optuna.create_study(direction='maximize')
-        study.optimize(lambda trial: objective(trial, train_data, val_data), n_trials=3, timeout=600)
+        study.optimize(lambda trial: objective(trial, train_data, val_data), n_trials=10)
 
         print("Number of finished trials: ", len(study.trials))
         print("Best trial:")
