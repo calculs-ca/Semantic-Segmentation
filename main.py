@@ -16,12 +16,13 @@ Dataset: Underwater imagery (SUIM)
 # Select model: 'unet', 'convnet'
 model_arch = 'convnet'
 # Default hyperparameters
-def_params = {
+dflt_params = {
     "model": model_arch,
     "features": [64, 128, 256],
     "batch_norm": True,
     "learning_rate": 1.10e-4,
-    "batch_size": 64,
+    "weight_decay": 1.0e-4,
+    "batch_size": 32,
     "epochs": 100
 }
 
@@ -35,6 +36,7 @@ class LitModel(pl.LightningModule):
             self.model = ConvNet(params["features"])
         self.experiment = experiment
         self.lr = params['learning_rate']
+        self.wd = params['weight_decay']
         self.criterion = nn.CrossEntropyLoss()
         # Metrics
         self.accu_train = Accuracy(num_classes=8)
@@ -102,7 +104,7 @@ class LitModel(pl.LightningModule):
                 self.experiment.log_image(viz, name='val_seg_vis', step=self.current_epoch)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.wd)
         return optimizer
 
 # Check if cuda is available
@@ -148,14 +150,14 @@ def train(params, train_data, val_data):
 
     trainer.fit(litmodel, train_loader, val_loader)
     val = trainer.callback_metrics['val_iou']
-    
+
     # Show segmentation example: input, prediction, true segmentation
     #show_seg(litmodel.model, val_loader)
     experiment.end()
     return val
 
 def objective(trial: optuna.trial.Trial, train_data, val_data):
-    params = def_params.copy()
+    params = dflt_params.copy()
     # Suggest hyperparams
     width = trial.suggest_categorical('width', [32, 64, 96])
     features = [width, 2*width, 4*width]
@@ -164,6 +166,7 @@ def objective(trial: optuna.trial.Trial, train_data, val_data):
             'optuna_trial': trial.number,
             'features': features,
             'learning_rate': trial.suggest_loguniform('learning_rate', 1e-5, 1e-1),
+            'weight_decay': trial.suggest_loguniform('weight_decay', 1e-5, 0.1),
             'batch_size': trial.suggest_categorical('batch_size', [16, 32, 64])
     })
     trial_val = train(params, train_data, val_data)
@@ -185,7 +188,7 @@ def main():
         for key, value in trial.params.items():
             print("     ", key, ":", value)
     else:
-        train(def_params, train_data, val_data)
+        train(dflt_params, train_data, val_data)
 
 if __name__ == '__main__':
     main()
