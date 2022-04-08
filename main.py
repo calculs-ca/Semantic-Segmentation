@@ -120,7 +120,7 @@ class LitModel(pl.LightningModule):
 def prepare_data(preprocess=False):
     if preprocess:
         preprocess_images(os.environ['DATA_PATH'])
-    prep_data = torch.load('./preprocessed_128.pt')
+    prep_data = torch.load(os.environ['DATA_PATH']+'/preprocessed_128.pt')
     trainval_imgs, trainval_masks_ = prep_data['images'], prep_data['masks']
     trainval_masks = [np.squeeze(m) for m in prep_data['masks']]
 
