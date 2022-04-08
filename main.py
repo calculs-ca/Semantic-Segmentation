@@ -26,6 +26,10 @@ dflt_params = {
     "epochs": 100
 }
 
+# Check if cuda is available
+train_on_gpu = torch.cuda.is_available()
+print('Is cuda available?', 'Yes' if train_on_gpu else 'No')
+
 # Lightning module
 class LitModel(pl.LightningModule):
     def __init__(self, model_arch, params, experiment):
@@ -70,7 +74,10 @@ class LitModel(pl.LightningModule):
             visualize = training_step_outputs[-1]["viz"]
             data, output, target = visualize
             for i in range(min(10, len(data))):
-                viz = visualize_seg(data[i], output[i], target[i])
+                if train_on_gpu:
+                    viz = visualize_seg(data[i].cpu(), output[i].cpu(), target[i].cpu())
+                else:
+                    viz = visualize_seg(data[i], output[i], target[i])
                 self.experiment.log_image(viz, name='seg_vis', step=self.current_epoch)
 
     def validation_step(self, batch, batch_idx):
@@ -100,16 +107,15 @@ class LitModel(pl.LightningModule):
             visualize = validation_step_outputs[-1]["viz"]
             data, output, target = visualize
             for i in range(min(10, len(data))):
-                viz = visualize_seg(data[i], output[i], target[i])
+                if train_on_gpu:
+                    viz = visualize_seg(data[i].cpu(), output[i].cpu(), target[i].cpu())
+                else:
+                    viz = visualize_seg(data[i], output[i], target[i])
                 self.experiment.log_image(viz, name='val_seg_vis', step=self.current_epoch)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.wd)
         return optimizer
-
-# Check if cuda is available
-train_on_gpu = torch.cuda.is_available()
-print('Is cuda available?', 'Yes' if train_on_gpu else 'No')
 
 def prepare_data(preprocess=False):
     if preprocess:
