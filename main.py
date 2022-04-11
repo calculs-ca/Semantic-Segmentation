@@ -125,7 +125,7 @@ def prepare_data(preprocess=False):
     trainval_masks = [np.squeeze(m) for m in prep_data['masks']]
 
     # Make dataset and apply transforms
-    trainval_data = imgDataset(trainval_imgs, trainval_masks)
+    trainval_data = imgDataset(trainval_imgs, trainval_masks, use_da=True)
     train_size = int(0.8 * len(trainval_data))
     val_size = len(trainval_data) - train_size
     train_data, val_data = random_split(trainval_data, [train_size, val_size])
