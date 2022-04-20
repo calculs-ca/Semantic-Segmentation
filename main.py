@@ -15,6 +15,10 @@ Dataset: Underwater imagery (SUIM)
 """
 # Select model: 'unet', 'convnet'
 model_arch = 'convnet'
+# Check if cuda is available
+train_on_gpu = torch.cuda.is_available()
+print('Is cuda available?', 'Yes' if train_on_gpu else 'No')
+
 # Default hyperparameters
 dflt_params = {
     "model": model_arch,
@@ -23,12 +27,9 @@ dflt_params = {
     "learning_rate": 1.10e-4,
     "weight_decay": 1.0e-4,
     "batch_size": 32,
-    "epochs": 100
+    "epochs": 100,
+    "gpus": 1 if train_on_gpu else None
 }
-
-# Check if cuda is available
-train_on_gpu = torch.cuda.is_available()
-print('Is cuda available?', 'Yes' if train_on_gpu else 'No')
 
 # Lightning module
 class LitModel(pl.LightningModule):
@@ -151,7 +152,7 @@ def train(params, train_data, val_data):
 
     # Train model
     early_stopping = pl.callbacks.EarlyStopping(monitor="val_iou", patience=10, mode="max")
-    trainer = pl.Trainer(logger=True, checkpoint_callback=False, max_epochs=params['epochs'], callbacks=[early_stopping])
+    trainer = pl.Trainer(logger=True, checkpoint_callback=False, max_epochs=params['epochs'], gpus=params['gpus'])
     #trainer = pl.Trainer(fast_dev_run=True)    # Fast run
 
     trainer.fit(litmodel, train_loader, val_loader)
