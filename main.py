@@ -23,12 +23,12 @@ print('Is cuda available?', 'Yes' if train_on_gpu else 'No')
 dflt_params = {
     "model": model_arch,
     "features": [64, 128, 256],
-    "batch_norm": True,
     "learning_rate": 1.10e-4,
     "weight_decay": 1.0e-4,
     "batch_size": 32,
     "epochs": 100,
     "gpus": 1 if train_on_gpu else None
+    "use_da": False
 }
 
 # Lightning module
@@ -126,7 +126,7 @@ def prepare_data(preprocess=False):
     trainval_masks = [np.squeeze(m) for m in prep_data['masks']]
 
     # Make dataset and apply transforms
-    trainval_data = imgDataset(trainval_imgs, trainval_masks, use_da=True)
+    trainval_data = imgDataset(trainval_imgs, trainval_masks, use_da=dflt_params['use_da'])
     train_size = int(0.8 * len(trainval_data))
     val_size = len(trainval_data) - train_size
     train_data, val_data = random_split(trainval_data, [train_size, val_size])
