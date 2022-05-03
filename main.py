@@ -1,5 +1,6 @@
 from comet_ml import Experiment
 import os
+import argparse
 import torch
 import torch.nn as nn
 from torchmetrics import IoU, Accuracy
@@ -14,7 +15,8 @@ from preprocess import preprocess_images
 Dataset: Underwater imagery (SUIM)
 """
 # Select model: 'unet', 'convnet'
-model_arch = 'convnet'
+model_arch = 'unet'
+
 # Check if cuda is available
 train_on_gpu = torch.cuda.is_available()
 print('Is cuda available?', 'Yes' if train_on_gpu else 'No')
@@ -27,7 +29,7 @@ dflt_params = {
     "weight_decay": 1.0e-4,
     "batch_size": 32,
     "epochs": 100,
-    "gpus": 1 if train_on_gpu else None
+    "gpus": 1 if train_on_gpu else None,
     "use_da": False
 }
 
@@ -161,6 +163,7 @@ def train(params, train_data, val_data):
     # Show segmentation example: input, prediction, true segmentation
     #show_seg(litmodel.model, val_loader)
     experiment.end()
+    #save model check point
     return val
 
 def objective(trial: optuna.trial.Trial, train_data, val_data):
@@ -176,16 +179,22 @@ def objective(trial: optuna.trial.Trial, train_data, val_data):
             'weight_decay': trial.suggest_loguniform('weight_decay', 1e-5, 0.1),
             'batch_size': trial.suggest_categorical('batch_size', [16, 32, 64])
     })
+    print('update params', params)
     trial_val = train(params, train_data, val_data)
     return trial_val
 
-def main():
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--hpo', action='store_true', help='Perform an HPO, instead of just doing a single run of training.')
+    args = ap.parse_args()
+    
     train_data, val_data = prepare_data()   # Prepare data
 
-    hp_optim = True
-    if hp_optim:
+    hp_optim = False
+    if args.hpo:
         study = optuna.create_study(direction='maximize')
-        study.optimize(lambda trial: objective(trial, train_data, val_data), n_trials=10)
+        study.optimize(lambda trial: objective(trial, train_data, val_data), n_trials=1)
+        torch.save(study.best_params, 'best_params.pkl')
 
         print("Number of finished trials: ", len(study.trials))
         print("Best trial:")
@@ -194,8 +203,6 @@ def main():
         print("  Params: ")
         for key, value in trial.params.items():
             print("     ", key, ":", value)
+        # save best params
     else:
         train(dflt_params, train_data, val_data)
-
-if __name__ == '__main__':
-    main()
