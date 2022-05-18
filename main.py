@@ -155,15 +155,20 @@ def train(params, train_data, val_data):
     # Train model
     early_stopping = pl.callbacks.EarlyStopping(monitor="val_iou", patience=10, mode="max")
     trainer = pl.Trainer(logger=True, checkpoint_callback=False, max_epochs=params['epochs'], gpus=params['gpus'])
-    #trainer = pl.Trainer(fast_dev_run=True)    # Fast run
 
     trainer.fit(litmodel, train_loader, val_loader)
     val = trainer.callback_metrics['val_iou']
 
     # Show segmentation example: input, prediction, true segmentation
     #show_seg(litmodel.model, val_loader)
+
+    # Save model checkpoint
+    dir = os.getcwd() + '/checkpoints/' + str(experiment.get_key())
+    os.mkdir(dir)
+    file_name = '/checkpoint_epoch=%s' % litmodel.current_epoch + '.ckpt'
+    trainer.save_checkpoint(dir + file_name)
+
     experiment.end()
-    #save model check point
     return val
 
 def objective(trial: optuna.trial.Trial, train_data, val_data):
@@ -188,7 +193,7 @@ if __name__ == '__main__':
     ap.add_argument('--hpo', action='store_true', help='Perform an HPO, instead of just doing a single run of training.')
     args = ap.parse_args()
     
-    train_data, val_data = prepare_data()   # Prepare data
+    train_data, val_data = prepare_data()
 
     hp_optim = False
     if args.hpo:
