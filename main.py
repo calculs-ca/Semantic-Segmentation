@@ -195,14 +195,5 @@ if __name__ == '__main__':
         study = optuna.create_study(direction='maximize')
         study.optimize(lambda trial: objective(trial, train_data, val_data), n_trials=1)
         torch.save(study.best_params, 'best_params.pkl')
-
-        print("Number of finished trials: ", len(study.trials))
-        print("Best trial:")
-        trial = study.best_trial
-        print("  Value: ", trial.value)
-        print("  Params: ")
-        for key, value in trial.params.items():
-            print("     ", key, ":", value)
-        # save best params
     else:
         train(dflt_params, train_data, val_data)
