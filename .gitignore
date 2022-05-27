@@ -1,4 +1,6 @@
 *.pyc
-.idea/
 *.sh
+*.pt
+.idea/
 lightning_logs/
+checkpoints/
