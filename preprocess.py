@@ -11,9 +11,13 @@ Classes: 8, BW-000, HD-001, PF-010, WR-011, RO-100, RI-101, FV-110, SR-111
 def load_images(path):
     images = []
     img_list = natsorted(os.listdir(path))
+
     for f in img_list:
         img_path = os.path.join(path, f)
-        img = np.array(Image.open(img_path).convert('RGB'))
+        try:
+            img = np.array(Image.open(img_path).convert('RGB'))
+        except IsADirectoryError:
+            continue
         if img is not None:
             images.append(img)
     return images
@@ -38,11 +42,10 @@ def label_mask(mask):
 def preprocess_images(path):
     trainval_imgs = load_images(path+'/train_val/images')
     trainval_masks = load_images(path+'/train_val/masks')
-    """
-    test_imgs = load_images(folder_path+'/TEST/images')
-    test_masks = load_images(folder_path+'/TEST/masks')
-    """
-    images = [imgTransform(img) for img in trainval_imgs]
-    masks = [maskTransform(label_mask(mask)) for mask in trainval_masks]
-    #Save dictionary
-    torch.save({'images': images, 'masks': masks}, 'preprocessed_128.pt')
+    test_imgs = load_images(path+'/TEST/images')
+    test_masks = load_images(path+'/TEST/masks')
+
+    torch.save({'images': [imgTransform(img) for img in trainval_imgs],
+                'masks': [maskTransform(label_mask(mask)) for mask in trainval_masks]}, 'preprocessed_128.pt')
+    torch.save({'images': [imgTransform(img) for img in test_imgs],
+                'masks': [maskTransform(label_mask(mask)) for mask in test_masks]}, 'test_preprocessed_128.pt')
