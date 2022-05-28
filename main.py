@@ -11,6 +11,8 @@ import optuna
 from utils import imgDataset, show_seg, visualize_seg
 from models import ConvNet, UNet
 from preprocess import preprocess_images
+import torchvision.transforms as transforms
+import glob
 """
 Dataset: Underwater imagery (SUIM)
 """
@@ -27,7 +29,7 @@ dflt_params = {
     "features": [64, 128, 256],
     "learning_rate": 1.10e-4,
     "weight_decay": 1.0e-4,
-    "batch_size": 32,
+    "batch_size": 16,
     "epochs": 100,
     "gpus": 1 if train_on_gpu else None,
     "use_da": False
@@ -35,7 +37,7 @@ dflt_params = {
 
 # Lightning module
 class LitModel(pl.LightningModule):
-    def __init__(self, model_arch, params, experiment):
+    def __init__(self, model_arch, params, experiment=None):
         super().__init__()
         if model_arch == 'unet':
             self.model = UNet(params["features"])
@@ -120,20 +122,25 @@ class LitModel(pl.LightningModule):
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=self.wd)
         return optimizer
 
-def prepare_data(preprocess=False):
+def prepare_data(path, preprocess=False):
     if preprocess:
-        preprocess_images(os.environ['DATA_PATH'])
-    prep_data = torch.load(os.environ['DATA_PATH']+'/preprocessed_128.pt')
-    trainval_imgs, trainval_masks_ = prep_data['images'], prep_data['masks']
-    trainval_masks = [np.squeeze(m) for m in prep_data['masks']]
+        preprocess_images(path)
+    trainval = torch.load(path + '/preprocessed_128.pt')
+    test = torch.load(path + '/test_preprocessed_128.pt')
+
+    trainval_imgs, _ = trainval['images'], trainval['masks']
+    trainval_masks = [np.squeeze(m) for m in trainval['masks']]
+    test_imgs, _ = test['images'], test['masks']
+    test_masks = [np.squeeze(m) for m in test['masks']]
 
     # Make dataset and apply transforms
     trainval_data = imgDataset(trainval_imgs, trainval_masks, use_da=dflt_params['use_da'])
+    test_data = imgDataset(test_imgs, test_masks)
     train_size = int(0.8 * len(trainval_data))
     val_size = len(trainval_data) - train_size
     train_data, val_data = random_split(trainval_data, [train_size, val_size])
 
-    return train_data, val_data
+    return train_data, val_data, test_data
 
 def train(params, train_data, val_data):
     # Create comet experiment
@@ -184,21 +191,45 @@ def objective(trial: optuna.trial.Trial, train_data, val_data):
             'weight_decay': trial.suggest_loguniform('weight_decay', 1e-5, 0.1),
             'batch_size': trial.suggest_categorical('batch_size', [16, 32, 64])
     })
-    print('update params', params)
+
     trial_val = train(params, train_data, val_data)
     return trial_val
+
+def load_and_test_model(path, hparams, dataset):
+    checkpoint = torch.load(glob.glob(str(path + '/*.ckpt'))[0], map_location=torch.device('cpu'))
+    # Load model
+    system = LitModel(model_arch, hparams)
+    system.load_state_dict(checkpoint['state_dict'])
+    model = system.model
+    metric = system.iou_val
+    print('[INF] system:', system)
+    # Load data
+    loader = DataLoader(dataset, batch_size=hparams["batch_size"], shuffle=True)
+    # Save prediction examples
+    model.eval()
+    transform = transforms.ToPILImage()
+    for i, batch in enumerate(loader):
+        img_batch, mask_batch = batch
+        viz = visualize_seg(img_batch[0], system.model(img_batch)[0], mask_batch[0])
+        pred = system.model(img_batch)
+        val = metric(pred, mask_batch).item()
+        name = '/pred_' + str(i).zfill(3) + '_IoU=%.2f'%val + '.png'
+        img = transform(viz.moveaxis(-1, 0))
+        img.save(path + name)
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--hpo', action='store_true', help='Perform an HPO, instead of just doing a single run of training.')
+    ap.add_argument('--test', action='store_true', help='Load and test trained model.')
     args = ap.parse_args()
-    
-    train_data, val_data = prepare_data()
 
-    hp_optim = False
+    train_data, val_data, test_data = prepare_data(os.environ['DATA_PATH'])
+
     if args.hpo:
         study = optuna.create_study(direction='maximize')
         study.optimize(lambda trial: objective(trial, train_data, val_data), n_trials=1)
         torch.save(study.best_params, 'best_params.pkl')
+    elif args.test:
+        load_and_test_model(os.environ['CHECKPOINT'], dflt_params, test_data)
     else:
         train(dflt_params, train_data, val_data)
