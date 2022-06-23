@@ -208,14 +208,17 @@ def load_and_test_model(path, hparams, dataset):
     # Save prediction examples
     model.eval()
     transform = transforms.ToPILImage()
+    metric_val = 0.
     for i, batch in enumerate(loader):
         img_batch, mask_batch = batch
         viz = visualize_seg(img_batch[0], system.model(img_batch)[0], mask_batch[0])
         pred = system.model(img_batch)
         val = metric(pred, mask_batch).item()
+        metric_val += val
         name = '/pred_' + str(i).zfill(3) + '_IoU=%.2f'%val + '.png'
         img = transform(viz.moveaxis(-1, 0))
         img.save(path + name)
+    print('Average metric value:', metric_val/len(loader))
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser()
