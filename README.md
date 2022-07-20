@@ -35,8 +35,6 @@ Make sure you set the environment variable ```DATA_PATH``` with the directory of
 export DATA_PATH=/path/to/data
 ```
 
-###### Known issues:  The data augmentation is implemented incorrectly since the modifications are done before training instead of during training.
-
 ## Performance during training
 To train the model we chose *CrossEntropyLoss* and *Adam* as the optimizer. As for metrics, we use torchmetrics to compute `Accuracy` and `IoU` (Intersection over Union).
 Using Optuna we ran 25 trials, each time training a UNet for 500 epochs and only changing the values of learning rate and weight decay to maximize the value of the IoU on the validation dataset. Out of the 25 trials, the best one was [comet.ml | magenta_madrill_8471](https://www.comet.ml/aklopezcarbajal/semantic-segmentation/40a97891e0e740cc9c48f2555bd57095?experiment-tab=chart&showOutliers=true&smoothing=0&transformY=smoothing&xAxis=step). During training, `train_IoU` reaches a value of `0.74` while `val_IoU` gets to `0.49`.
@@ -58,3 +56,6 @@ The average IoU value on the test dataset was `0.45`. The following images show,
   <img src="imgs/pred_006_IoU=0.45.png">
   <img src="imgs/pred_013_IoU=0.53.png">
 </p>
+
+## Known issues
+The data augmentation is implemented incorrectly. We applied transformations to each image but only kept one version of the image, so the dataset size stayed the same.
